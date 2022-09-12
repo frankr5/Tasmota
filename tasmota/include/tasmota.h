@@ -95,6 +95,7 @@ const uint8_t MAX_PCF8574 = 4;              // Max number of PCF8574 devices
 const uint8_t MAX_DS3502 = 4;               // Max number of DS3502 digitsal potentiometer devices
 const uint8_t MAX_IRSEND = 16;              // Max number of IRSEND GPIOs
 const uint8_t MAX_RULE_SETS = 3;            // Max number of rule sets of size 512 characters
+const uint8_t MAX_TIMEPROPS = 4;            // Max number of timeprops (xdrv 48)
 const uint16_t MAX_RULE_SIZE = 512;         // Max number of characters in rules
 const uint16_t VL53LXX_MAX_SENSORS = 8;     // Max number of VL53L0X sensors
 
@@ -410,6 +411,7 @@ enum SettingsTextIndex { SET_OTAURL,
                          SET_DEV_GROUP_NAME1, SET_DEV_GROUP_NAME2, SET_DEV_GROUP_NAME3, SET_DEV_GROUP_NAME4,  // MAX_DEV_GROUP_NAMES
                          SET_DEVICENAME,
                          SET_TELEGRAM_TOKEN, SET_TELEGRAM_CHATID,
+                         SET_TIMEPROP_BASEVALUES, SET_TIMEPROP_FALLBACKVALUES,
 #ifdef ESP8266
                          SET_ADC_PARAM1,
                          SET_SWITCH_TXT1, SET_SWITCH_TXT2, SET_SWITCH_TXT3, SET_SWITCH_TXT4, SET_SWITCH_TXT5, SET_SWITCH_TXT6, SET_SWITCH_TXT7, SET_SWITCH_TXT8,  // MAX_SWITCHES_TXT

@@ -739,6 +739,12 @@
 #define D_CMND_PING "Ping"
 #define D_JSON_PING "Ping"
 
+// Commands xdrv_48_timeprop.ino
+#define D_PRFX_TIMEPROP "Timeprop"
+#define D_CMND_TIMEPROP_SET "Set"
+#define D_CMND_TIMEPROP_TIMEBASE "TimeBase"
+#define D_CMND_TIMEPROP_FALLBACKVALUE "FallbackValue"
+
 // Commands xdrv_52_berry.ino - Berry scripting language
 #define D_PRFX_BR "Br"
 #define D_CMND_BR_RUN ""

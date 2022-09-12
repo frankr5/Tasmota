@@ -19,6 +19,247 @@
 
 #ifdef USE_TIMEPROP
 #ifndef FIRMWARE_MINIMAL
+
+#define XDRV_48 48
+
+uint8_t seconds_modulo = 0; // increased every second. If dividable by 60 we have a minute
+
+struct TIMEPROPSSTATE
+{
+  bool is_running = false;     // set to true with first set value
+  uint8_t minutes_running = 0; // increased every minute. Reset when time base reached
+  uint8_t set_value = 0;       // value that has been set via Set command
+} Timepropsstate[MAX_TIMEPROPS];
+
+const char kTimepropCommands[] PROGMEM = D_PRFX_TIMEPROP "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_TIMEBASE "|" D_CMND_TIMEPROP_FALLBACKVALUE "|";
+
+void (*const TimepropCommand[])(void) PROGMEM = {
+    &CmndTimepropSet, &CmndTimepropTimeBase, &CmndTimepropFallbackvalue};
+
+// #define D_PRFX_TIMEPROP "Timeprop"
+// #define D_CMND_TIMEPROP_TIMEBASE "TimepropTimeBase1 15"
+// #define D_CMND_TIMEPROP_FALLBACKVALUE "TimepropFallbackValue1 0.4"
+// #define D_CMND_TIMEPROP_SET "TimepropSet2 0.4"
+
+void TimepropInit(void)
+{
+  // TODO: Remove
+  for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
+  {
+    Timepropsstate[i].is_running = true;
+  }
+  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop Init"));
+}
+
+void TimepropEveryMinute(void)
+{
+  // OpenMinutesDebug(0);
+  for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
+  {
+    if (TimeBaseForTimeProp(i) == 0)
+    {
+      continue;
+    }
+    if (Timepropsstate[i].is_running == false)
+    {
+      continue;
+    }
+
+    if (Timepropsstate[i].set_value == 0)
+    {
+      // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute set_value is zero for Number %d"), i);
+    }
+    else
+    {
+      if (Timepropsstate[i].minutes_running == 0)
+      {
+        AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute start cycle %d with openening for %d minutes"), i, OpenMinutes(i));
+      }
+      if (Timepropsstate[i].minutes_running >= OpenMinutes(i))
+      {
+        AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute mid cycle %d with closing"), i);
+      }
+    }
+
+    // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute do something %d %d"), i, Timepropsstate[i].minutes_running);
+
+    Timepropsstate[i].minutes_running++;
+
+    if (Timepropsstate[i].minutes_running >= TimeBaseForTimeProp(i))
+    {
+      Timepropsstate[i].minutes_running = 0;
+    }
+  }
+}
+
+void TimepropEverySecond(void)
+{
+  seconds_modulo++;
+
+  if ((seconds_modulo % 60) == 0)
+  {
+    TimepropEveryMinute();
+    seconds_modulo = 0;
+  }
+}
+
+// void TimepropXdrvPower(void)
+// {
+//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropXdrvPower"));
+//   // for a single relay the state is in the lsb of index, I have think that for
+//   // multiple outputs then succesive bits will hold the state but have not been
+//   // able to test that
+//   // Tprop.current_relay_states = XdrvMailbox.index;
+// }
+
+void CmndTimepropSet(void)
+{
+  if (XdrvMailbox.index < 1 || XdrvMailbox.index > MAX_TIMEPROPS)
+  {
+    return;
+  }
+
+  uint32_t incoming_value;
+  if (XdrvMailbox.data_len > 0)
+  {
+    char sub_string[XdrvMailbox.data_len];
+
+    incoming_value = atoi(subStr(sub_string, XdrvMailbox.data, ",", 1));
+
+    if (incoming_value < 0 || incoming_value > 100)
+    {
+      return;
+    }
+
+    Timepropsstate[XdrvMailbox.index - 1].set_value = incoming_value;
+    Timepropsstate[XdrvMailbox.index - 1].is_running = true;
+  }
+
+  // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropSet for number %d with value %d"), XdrvMailbox.index - 1, Timepropsstate[XdrvMailbox.index - 1].set_value);
+
+  ResponseCmndNumber(Timepropsstate[XdrvMailbox.index - 1].set_value);
+
+  // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropTimeBase payload %s (%d), payload %d, idx %d, src %d"), XdrvMailbox.data, XdrvMailbox.data_len, XdrvMailbox.payload, XdrvMailbox.index, TasmotaGlobal.last_source);
+
+  // ResponseCmndFloat(0.9, 1);
+  // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropTimeBase for %d"), XdrvMailbox.index);
+}
+
+void CmndTimepropTimeBase(void)
+{
+  if (XdrvMailbox.index < 1 || XdrvMailbox.index > MAX_TIMEPROPS)
+  {
+    return;
+  }
+
+  uint8_t incoming_value;
+  if (XdrvMailbox.data_len > 0)
+  {
+    char sub_string[XdrvMailbox.data_len];
+
+    incoming_value = atoi(subStr(sub_string, XdrvMailbox.data, ",", 1));
+
+    if (incoming_value < 0 || incoming_value > 31)
+    {
+      return;
+    }
+
+    uint8_t intermediate_fallbackvalue = Settings->timeprop[XdrvMailbox.index - 1] & 0x7;
+    Settings->timeprop[XdrvMailbox.index - 1] = incoming_value << 3;
+    Settings->timeprop[XdrvMailbox.index - 1] = Settings->timeprop[XdrvMailbox.index - 1] | intermediate_fallbackvalue;
+    SettingsSave(0);
+  }
+
+  ResponseCmndNumber(Settings->timeprop[XdrvMailbox.index - 1] >> 3);
+}
+
+void CmndTimepropFallbackvalue(void)
+{
+  if (XdrvMailbox.index < 1 || XdrvMailbox.index > MAX_TIMEPROPS)
+  {
+    return;
+  }
+
+  uint32_t incoming_value;
+  if (XdrvMailbox.data_len > 0)
+  {
+    char sub_string[XdrvMailbox.data_len];
+
+    incoming_value = atoi(subStr(sub_string, XdrvMailbox.data, ",", 1));
+    if (incoming_value < 0 || incoming_value > 100)
+    {
+      return;
+    }
+
+    uint8_t store_value = round((float)7 * (float)incoming_value / (float)100);
+    Settings->timeprop[XdrvMailbox.index - 1] = Settings->timeprop[XdrvMailbox.index - 1] & 0xf8;
+    Settings->timeprop[XdrvMailbox.index - 1] = Settings->timeprop[XdrvMailbox.index - 1] | store_value;
+    // Settings->timeprop[XdrvMailbox.index - 1] = incoming_value << 3;
+    SettingsSave(0);
+  }
+
+  ResponseCmndNumber(uint8_t((Settings->timeprop[XdrvMailbox.index - 1] & 0x7) * 100 / 7));
+}
+
+/*********************************************************************************************\
+ * Helper
+\*********************************************************************************************/
+uint8_t TimeBaseForTimeProp(uint8_t index)
+{
+  return Settings->timeprop[index] >> 3;
+}
+
+uint8_t OpenMinutes(uint8_t index)
+{
+  float f_set_value = (float)Timepropsstate[index].set_value / 100.0f * (float)TimeBaseForTimeProp(index);
+  uint8_t set_value = round(f_set_value);
+
+  return set_value;
+}
+
+// uint8_t OpenMinutesDebug(uint8_t index)
+// {
+//   float f_set_value = (float)Timepropsstate[index].set_value / 100.0f * (float)TimeBaseForTimeProp(index);
+//   uint8_t set_value = round(f_set_value);
+//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called.   set_value: %d"), Timepropsstate[index].set_value);
+//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called. f_set_value: %_f"), &f_set_value);
+//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called. f_set_value: %d"), set_value);
+  
+//   // float multiplicator = float(Timepropsstate[index].set_value) / 100.0;
+//   // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutes. multiplicator: %.6f"), multiplicator);
+//   // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutes. Index: %d TimeBaseForTimeProp(index): %d Timepropsstate[index].set_value = %d. Calulation: %d"), index, TimeBaseForTimeProp(index), Timepropsstate[index].set_value);
+
+//   // return uint8_t(float(TimeBaseForTimeProp(index)) * (float(Timepropsstate[index].set_value) / float(100)));
+
+//   return 3;
+// }
+
+/*********************************************************************************************\
+ * Interface
+\*********************************************************************************************/
+
+bool Xdrv48(byte function)
+{
+  bool result = false;
+
+  switch (function)
+  {
+  case FUNC_INIT:
+    TimepropInit();
+    break;
+  case FUNC_EVERY_SECOND:
+    TimepropEverySecond();
+    break;
+  case FUNC_COMMAND:
+    result = DecodeCommand(kTimepropCommands, TimepropCommand);
+    break;
+    // case FUNC_SET_POWER:
+    //   TimepropXdrvPower();
+    //   break;
+  }
+  return result;
+}
+
 /*********************************************************************************************\
  * Code to drive one or more relays in a time proportioned manner give a
  * required power value.
@@ -83,166 +324,164 @@
  *
 **/
 
+// #define D_CMND_TIMEPROP "timeprop_"
+// #define D_CMND_TIMEPROP_SETPOWER "setpower_"    // add index no on end (0:8) and data is power 0:1
 
+// #include "Timeprop.h"
 
-#define D_CMND_TIMEPROP "timeprop_"
-#define D_CMND_TIMEPROP_SETPOWER "setpower_"    // add index no on end (0:8) and data is power 0:1
+// enum TimepropCommands { CMND_TIMEPROP_SETPOWER };
+// const char kTimepropCommands[] PROGMEM = D_CMND_TIMEPROP_SETPOWER;
 
-#include "Timeprop.h"
+// #ifndef TIMEPROP_NUM_OUTPUTS
+// #define TIMEPROP_NUM_OUTPUTS          1       // how many outputs to control (with separate alogorithm for each)
+// #endif
+// #ifndef TIMEPROP_CYCLETIMES
+// #define TIMEPROP_CYCLETIMES           60      // cycle time seconds
+// #endif
+// #ifndef TIMEPROP_DEADTIMES
+// #define TIMEPROP_DEADTIMES            0       // actuator action time seconds
+// #endif
+// #ifndef TIMEPROP_OPINVERTS
+// #define TIMEPROP_OPINVERTS            false   // whether to invert the output
+// #endif
+// #ifndef TIMEPROP_FALLBACK_POWERS
+// #define TIMEPROP_FALLBACK_POWERS      0       // falls back to this if too long betwen power updates
+// #endif
+// #ifndef TIMEPROP_MAX_UPDATE_INTERVALS
+// #define TIMEPROP_MAX_UPDATE_INTERVALS 120     // max no secs that are allowed between power updates (0 to disable)
+// #endif
+// #ifndef TIMEPROP_RELAYS
+// #define TIMEPROP_RELAYS               1       // which relay to control 1:8
+// #endif
 
-enum TimepropCommands { CMND_TIMEPROP_SETPOWER };
-const char kTimepropCommands[] PROGMEM = D_CMND_TIMEPROP_SETPOWER;
+// static Timeprop timeprops[TIMEPROP_NUM_OUTPUTS];
+// static int relayNos[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_RELAYS};
+// static long currentRelayStates = 0;  // current actual relay states. Bit 0 first relay
 
-#ifndef TIMEPROP_NUM_OUTPUTS
-#define TIMEPROP_NUM_OUTPUTS          1       // how many outputs to control (with separate alogorithm for each)
-#endif
-#ifndef TIMEPROP_CYCLETIMES
-#define TIMEPROP_CYCLETIMES           60      // cycle time seconds
-#endif
-#ifndef TIMEPROP_DEADTIMES
-#define TIMEPROP_DEADTIMES            0       // actuator action time seconds
-#endif
-#ifndef TIMEPROP_OPINVERTS
-#define TIMEPROP_OPINVERTS            false   // whether to invert the output
-#endif
-#ifndef TIMEPROP_FALLBACK_POWERS
-#define TIMEPROP_FALLBACK_POWERS      0       // falls back to this if too long betwen power updates
-#endif
-#ifndef TIMEPROP_MAX_UPDATE_INTERVALS
-#define TIMEPROP_MAX_UPDATE_INTERVALS 120     // max no secs that are allowed between power updates (0 to disable)
-#endif
-#ifndef TIMEPROP_RELAYS
-#define TIMEPROP_RELAYS               1       // which relay to control 1:8
-#endif
+// struct {
+//   Timeprop timeprops[TIMEPROP_NUM_OUTPUTS];
+//   int relay_nos[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_RELAYS};
+//   long current_relay_states = 0;  // current actual relay states. Bit 0 first relay
+//   long current_time_secs = 0;  // a counter that counts seconds since initialisation
+// } Tprop;
 
-static Timeprop timeprops[TIMEPROP_NUM_OUTPUTS];
-static int relayNos[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_RELAYS};
-static long currentRelayStates = 0;  // current actual relay states. Bit 0 first relay
+// /* call this from elsewhere if required to set the power value for one of the timeprop instances */
+// /* index specifies which one, 0 up */
+// void TimepropSetPower(int index, float power) {
+//   if (index >= 0  &&  index < TIMEPROP_NUM_OUTPUTS) {
+//     Tprop.timeprops[index].setPower( power, Tprop.current_time_secs);
+//   }
+// }
 
-struct {
-  Timeprop timeprops[TIMEPROP_NUM_OUTPUTS];
-  int relay_nos[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_RELAYS};
-  long current_relay_states = 0;  // current actual relay states. Bit 0 first relay
-  long current_time_secs = 0;  // a counter that counts seconds since initialisation
-} Tprop;
+// void TimepropInit(void) {
+//   // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop Init"));
+//   int cycleTimes[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_CYCLETIMES};
+//   int deadTimes[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_DEADTIMES};
+//   int opInverts[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_OPINVERTS};
+//   int fallbacks[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_FALLBACK_POWERS};
+//   int maxIntervals[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_MAX_UPDATE_INTERVALS};
 
-/* call this from elsewhere if required to set the power value for one of the timeprop instances */
-/* index specifies which one, 0 up */
-void TimepropSetPower(int index, float power) {
-  if (index >= 0  &&  index < TIMEPROP_NUM_OUTPUTS) {
-    Tprop.timeprops[index].setPower( power, Tprop.current_time_secs);
-  }
-}
+//   for (int i = 0; i < TIMEPROP_NUM_OUTPUTS; i++) {
+//     Tprop.timeprops[i].initialise(cycleTimes[i], deadTimes[i], opInverts[i], fallbacks[i],
+//       maxIntervals[i], Tprop.current_time_secs);
+//   }
+// }
 
-void TimepropInit(void) {
-  // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop Init"));
-  int cycleTimes[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_CYCLETIMES};
-  int deadTimes[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_DEADTIMES};
-  int opInverts[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_OPINVERTS};
-  int fallbacks[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_FALLBACK_POWERS};
-  int maxIntervals[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_MAX_UPDATE_INTERVALS};
+// void TimepropEverySecond(void) {
+//   Tprop.current_time_secs++;    // increment time
+//   for (int i=0; i<TIMEPROP_NUM_OUTPUTS; i++) {
+//     int newState = Tprop.timeprops[i].tick(Tprop.current_time_secs);
+//     if (newState != bitRead(Tprop.current_relay_states, Tprop.relay_nos[i]-1)){
+//       // remove the third parameter below if using tasmota prior to v6.0.0
+//       ExecuteCommandPower(Tprop.relay_nos[i], newState,SRC_IGNORE);
+//     }
+//   }
+// }
 
-  for (int i = 0; i < TIMEPROP_NUM_OUTPUTS; i++) {
-    Tprop.timeprops[i].initialise(cycleTimes[i], deadTimes[i], opInverts[i], fallbacks[i],
-      maxIntervals[i], Tprop.current_time_secs);
-  }
-}
+// // called by the system each time a relay state is changed
+// void TimepropXdrvPower(void) {
+//   // for a single relay the state is in the lsb of index, I have think that for
+//   // multiple outputs then succesive bits will hold the state but have not been
+//   // able to test that
+//   Tprop.current_relay_states = XdrvMailbox.index;
+// }
 
-void TimepropEverySecond(void) {
-  Tprop.current_time_secs++;    // increment time
-  for (int i=0; i<TIMEPROP_NUM_OUTPUTS; i++) {
-    int newState = Tprop.timeprops[i].tick(Tprop.current_time_secs);
-    if (newState != bitRead(Tprop.current_relay_states, Tprop.relay_nos[i]-1)){
-      // remove the third parameter below if using tasmota prior to v6.0.0
-      ExecuteCommandPower(Tprop.relay_nos[i], newState,SRC_IGNORE);
-    }
-  }
-}
+// /* struct XDRVMAILBOX { */
+// /*   uint16_t      valid; */
+// /*   uint16_t      index; */
+// /*   uint16_t      data_len; */
+// /*   int16_t       payload; */
+// /*   char         *topic; */
+// /*   char         *data; */
+// /* } XdrvMailbox; */
 
-// called by the system each time a relay state is changed
-void TimepropXdrvPower(void) {
-  // for a single relay the state is in the lsb of index, I have think that for
-  // multiple outputs then succesive bits will hold the state but have not been
-  // able to test that
-  Tprop.current_relay_states = XdrvMailbox.index;
-}
+// // To get here post with topic cmnd/timeprop_setpower_n where n is index into timeprops 0:7
+// bool TimepropCommand()
+// {
+//   char command [CMDSZ];
+//   bool serviced = true;
+//   uint8_t ua_prefix_len = strlen(D_CMND_TIMEPROP); // to detect prefix of command
+//   /*
+//   AddLog(LOG_LEVEL_INFO, PSTR("Command called: "
+//     "index: %d data_len: %d payload: %d topic: %s data: %s"),
+//     XdrvMailbox.index,
+//     XdrvMailbox.data_len,
+//     XdrvMailbox.payload,
+//     (XdrvMailbox.payload >= 0 ? XdrvMailbox.topic : ""),
+//     (XdrvMailbox.data_len >= 0 ? XdrvMailbox.data : ""));
+//   */
+//   if (0 == strncasecmp_P(XdrvMailbox.topic, PSTR(D_CMND_TIMEPROP), ua_prefix_len)) {
+//     // command starts with timeprop_
+//     int command_code = GetCommandCode(command, sizeof(command), XdrvMailbox.topic + ua_prefix_len, kTimepropCommands);
+//     if (CMND_TIMEPROP_SETPOWER == command_code) {
+//       /*
+//       AddLog(LOG_LEVEL_INFO, PSTR("Timeprop command timeprop_setpower: "
+//         "index: %d data_len: %d payload: %d topic: %s data: %s"),
+// 	      XdrvMailbox.index,
+// 	      XdrvMailbox.data_len,
+// 	      XdrvMailbox.payload,
+// 	      (XdrvMailbox.payload >= 0 ? XdrvMailbox.topic : ""),
+// 	      (XdrvMailbox.data_len >= 0 ? XdrvMailbox.data : ""));
+//       */
+//       if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS) {
+//         timeprops[XdrvMailbox.index].setPower( atof(XdrvMailbox.data), Tprop.current_time_secs );
+//       }
+//       Response_P(PSTR("{\"" D_CMND_TIMEPROP D_CMND_TIMEPROP_SETPOWER "%d\":\"%s\"}"), XdrvMailbox.index, XdrvMailbox.data);
+//     }
+//     else {
+//       serviced = false;
+//     }
+//   } else {
+//     serviced = false;
+//   }
+//   return serviced;
+// }
 
-/* struct XDRVMAILBOX { */
-/*   uint16_t      valid; */
-/*   uint16_t      index; */
-/*   uint16_t      data_len; */
-/*   int16_t       payload; */
-/*   char         *topic; */
-/*   char         *data; */
-/* } XdrvMailbox; */
+// /*********************************************************************************************\
+//  * Interface
+// \*********************************************************************************************/
 
-// To get here post with topic cmnd/timeprop_setpower_n where n is index into timeprops 0:7
-bool TimepropCommand()
-{
-  char command [CMDSZ];
-  bool serviced = true;
-  uint8_t ua_prefix_len = strlen(D_CMND_TIMEPROP); // to detect prefix of command
-  /*
-  AddLog(LOG_LEVEL_INFO, PSTR("Command called: "
-    "index: %d data_len: %d payload: %d topic: %s data: %s"),
-    XdrvMailbox.index,
-    XdrvMailbox.data_len,
-    XdrvMailbox.payload,
-    (XdrvMailbox.payload >= 0 ? XdrvMailbox.topic : ""),
-    (XdrvMailbox.data_len >= 0 ? XdrvMailbox.data : ""));
-  */
-  if (0 == strncasecmp_P(XdrvMailbox.topic, PSTR(D_CMND_TIMEPROP), ua_prefix_len)) {
-    // command starts with timeprop_
-    int command_code = GetCommandCode(command, sizeof(command), XdrvMailbox.topic + ua_prefix_len, kTimepropCommands);
-    if (CMND_TIMEPROP_SETPOWER == command_code) {
-      /*
-      AddLog(LOG_LEVEL_INFO, PSTR("Timeprop command timeprop_setpower: "
-        "index: %d data_len: %d payload: %d topic: %s data: %s"),
-	      XdrvMailbox.index,
-	      XdrvMailbox.data_len,
-	      XdrvMailbox.payload,
-	      (XdrvMailbox.payload >= 0 ? XdrvMailbox.topic : ""),
-	      (XdrvMailbox.data_len >= 0 ? XdrvMailbox.data : ""));
-      */
-      if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS) {
-        timeprops[XdrvMailbox.index].setPower( atof(XdrvMailbox.data), Tprop.current_time_secs );
-      }
-      Response_P(PSTR("{\"" D_CMND_TIMEPROP D_CMND_TIMEPROP_SETPOWER "%d\":\"%s\"}"), XdrvMailbox.index, XdrvMailbox.data);
-    }
-    else {
-      serviced = false;
-    }
-  } else {
-    serviced = false;
-  }
-  return serviced;
-}
+// #define XDRV_48       48
 
-/*********************************************************************************************\
- * Interface
-\*********************************************************************************************/
+// bool Xdrv48(byte function) {
+//   bool result = false;
 
-#define XDRV_48       48
-
-bool Xdrv48(byte function) {
-  bool result = false;
-
-  switch (function) {
-    case FUNC_INIT:
-      TimepropInit();
-      break;
-    case FUNC_EVERY_SECOND:
-      TimepropEverySecond();
-      break;
-    case FUNC_COMMAND:
-      result = TimepropCommand();
-      break;
-    case FUNC_SET_POWER:
-      TimepropXdrvPower();
-      break;
-  }
-  return result;
-}
+//   switch (function) {
+//     case FUNC_INIT:
+//       TimepropInit();
+//       break;
+//     case FUNC_EVERY_SECOND:
+//       TimepropEverySecond();
+//       break;
+//     case FUNC_COMMAND:
+//       result = TimepropCommand();
+//       break;
+//     case FUNC_SET_POWER:
+//       TimepropXdrvPower();
+//       break;
+//   }
+//   return result;
+// }
 
 #endif // FIRMWARE_MINIMAL
 #endif // USE_TIMEPROP

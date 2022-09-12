@@ -835,8 +835,9 @@ typedef struct {
   uint8_t       light_step_pixels;				 // F60
   uint8_t       modbus_sbaudrate;          // F61
   uint8_t       modbus_sconfig;            // F62
+  uint8_t       timeprop[MAX_TIMEPROPS];   // F63
 
-  uint8_t       free_f63[17];              // F63 - Decrement if adding new Setting variables just above and below
+  uint8_t       free_f64[13];              // F67 - Decrement if adding new Setting variables just above and below
 
   // Only 32 bit boundary variables below
   SOBitfield6   flag6;                     // F74
