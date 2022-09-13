@@ -96,7 +96,8 @@ struct TIMEPROPSSTATE
 const char kTimepropCommands[] PROGMEM = D_PRFX_TIMEPROP "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_TIMEBASE "|" D_CMND_TIMEPROP_FALLBACKVALUE "|" D_CMND_TIMEPROP_STARTWITHFALLBACK "|" D_CMND_TIMEPROP_FALLBACKAFTER "|";
 
 void (*const TimepropCommand[])(void) PROGMEM = {
-    &CmndTimepropSet, &CmndTimepropTimeBase, &CmndTimepropFallbackvalue, &CmndTimepropStartWithFallback, &CmndTimepropFallbackAfter};
+    &CmndTimepropSet, &CmndTimepropTimeBase, &CmndTimepropFallbackvalue,
+    &CmndTimepropStartWithFallback, &CmndTimepropFallbackAfter};
 
 /*********************************************************************************************\
  * Init
