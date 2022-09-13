@@ -284,8 +284,6 @@ void CmndTimepropStartWithFallback(void)
 
 void CmndTimepropFallbackAfter(void)
 {
-  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropFallbackAfter called."));
-
   if (XdrvMailbox.data_len > 0)
   {
     char sub_string[XdrvMailbox.data_len];
@@ -313,15 +311,10 @@ void SyncSettings(void)
   {
     Timepropsstate[i].fallback_value = round((float)Settings->timeprop[i].fallback_value * (float)100 / (float)7);
     Timepropsstate[i].timebase = Settings->timeprop[i].timebase * 60;
-
-    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings timeprop %d fallback_vlaue %d."), i, Timepropsstate[i].fallback_value);
-    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings timeprop %d timebase %d."), i, Timepropsstate[i].timebase);
   }
   fallback_after_seconds = Settings->timeprop_cfg.fallback_time * 60 * 60;
   start_with_fallback = Settings->timeprop_cfg.start_with_fallback;
 
-  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings fallback_after_seconds %d."), fallback_after_seconds);
-  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings start_with_fallback %d."), start_with_fallback);
 }
 
 uint8_t OpenSeconds(uint8_t index)
