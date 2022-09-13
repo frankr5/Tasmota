@@ -486,6 +486,14 @@ typedef union {
   };
 } DisplayOptions;
 
+typedef union {
+  uint8_t data;
+  struct {
+  uint8_t start_with_fallback : 1;
+  uint8_t fallback_time : 7;
+  };
+} TimepropCfg;
+
 const uint32_t settings_text_size = 699;   // Settings->text_pool[size] = Settings->display_model (2D2) - Settings->text_pool (017)
 const uint8_t MAX_TUYA_FUNCTIONS = 16;
 const uint8_t PARAM8_SIZE = 18;            // Number of param bytes (SetOption)
@@ -836,8 +844,9 @@ typedef struct {
   uint8_t       modbus_sbaudrate;          // F61
   uint8_t       modbus_sconfig;            // F62
   uint8_t       timeprop[MAX_TIMEPROPS];   // F63
+  TimepropCfg   timeprop_cfg;              // F67
 
-  uint8_t       free_f64[13];              // F67 - Decrement if adding new Setting variables just above and below
+  uint8_t       free_f68[12];              // F68 - Decrement if adding new Setting variables just above and below
 
   // Only 32 bit boundary variables below
   SOBitfield6   flag6;                     // F74

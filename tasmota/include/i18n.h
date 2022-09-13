@@ -744,6 +744,8 @@
 #define D_CMND_TIMEPROP_SET "Set"
 #define D_CMND_TIMEPROP_TIMEBASE "TimeBase"
 #define D_CMND_TIMEPROP_FALLBACKVALUE "FallbackValue"
+#define D_CMND_TIMEPROP_STARTWITHFALLBACK "StartWithFallback"
+#define D_CMND_TIMEPROP_FALLBACKAFTER "FallbackAfter"
 
 // Commands xdrv_52_berry.ino - Berry scripting language
 #define D_PRFX_BR "Br"

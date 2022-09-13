@@ -31,10 +31,10 @@ struct TIMEPROPSSTATE
   uint8_t set_value = 0;       // value that has been set via Set command
 } Timepropsstate[MAX_TIMEPROPS];
 
-const char kTimepropCommands[] PROGMEM = D_PRFX_TIMEPROP "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_TIMEBASE "|" D_CMND_TIMEPROP_FALLBACKVALUE "|";
+const char kTimepropCommands[] PROGMEM = D_PRFX_TIMEPROP "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_TIMEBASE "|" D_CMND_TIMEPROP_FALLBACKVALUE "|" D_CMND_TIMEPROP_STARTWITHFALLBACK "|" D_CMND_TIMEPROP_FALLBACKAFTER "|";
 
 void (*const TimepropCommand[])(void) PROGMEM = {
-    &CmndTimepropSet, &CmndTimepropTimeBase, &CmndTimepropFallbackvalue};
+    &CmndTimepropSet, &CmndTimepropTimeBase, &CmndTimepropFallbackvalue, &CmndTimepropStartWithFallback, &CmndTimepropFallbackAfter};
 
 // #define D_PRFX_TIMEPROP "Timeprop"
 // #define D_CMND_TIMEPROP_TIMEBASE "TimepropTimeBase1 15"
@@ -43,17 +43,32 @@ void (*const TimepropCommand[])(void) PROGMEM = {
 
 void TimepropInit(void)
 {
-  // TODO: Remove
-  for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
+  if (Settings->timeprop_cfg.start_with_fallback)
   {
-    Timepropsstate[i].is_running = true;
+    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Init timeprop_start_with_fallback is set"));
+
+    for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
+    {
+      if (TimeBaseForTimeProp(i) == 0)
+      {
+        continue;
+      }
+
+      Timepropsstate[i].is_running = true;
+      Timepropsstate[i].set_value = round((float)(Settings->timeprop[i] & 0x7) * (float)100 / (float)7);
+
+    }
   }
+  else
+  {
+    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Init timeprop_start_with_fallback is not set"));
+  }
+
   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop Init"));
 }
 
 void TimepropEveryMinute(void)
 {
-  // OpenMinutesDebug(0);
   for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
   {
     if (TimeBaseForTimeProp(i) == 0)
@@ -135,14 +150,7 @@ void CmndTimepropSet(void)
     Timepropsstate[XdrvMailbox.index - 1].is_running = true;
   }
 
-  // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropSet for number %d with value %d"), XdrvMailbox.index - 1, Timepropsstate[XdrvMailbox.index - 1].set_value);
-
   ResponseCmndNumber(Timepropsstate[XdrvMailbox.index - 1].set_value);
-
-  // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropTimeBase payload %s (%d), payload %d, idx %d, src %d"), XdrvMailbox.data, XdrvMailbox.data_len, XdrvMailbox.payload, XdrvMailbox.index, TasmotaGlobal.last_source);
-
-  // ResponseCmndFloat(0.9, 1);
-  // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropTimeBase for %d"), XdrvMailbox.index);
 }
 
 void CmndTimepropTimeBase(void)
@@ -198,7 +206,31 @@ void CmndTimepropFallbackvalue(void)
     SettingsSave(0);
   }
 
-  ResponseCmndNumber(uint8_t((Settings->timeprop[XdrvMailbox.index - 1] & 0x7) * 100 / 7));
+  ResponseCmndNumber(round((float)(Settings->timeprop[XdrvMailbox.index - 1] & 0x7) * (float)100 / (float)7));
+}
+
+void CmndTimepropStartWithFallback(void)
+{
+  if (XdrvMailbox.data_len == 1)
+  {
+    char sub_string[XdrvMailbox.data_len];
+
+    uint8_t incoming_value = atoi(subStr(sub_string, XdrvMailbox.data, ",", 1));
+    if (incoming_value < 0 || incoming_value > 1)
+    {
+      return;
+    }
+
+    Settings->timeprop_cfg.start_with_fallback = incoming_value;
+    SettingsSave(0);
+  }
+
+  ResponseCmndNumber(Settings->timeprop_cfg.start_with_fallback);
+}
+
+void CmndTimepropFallbackAfter(void)
+{
+  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropFallbackAfter called."));
 }
 
 /*********************************************************************************************\
@@ -224,7 +256,7 @@ uint8_t OpenMinutes(uint8_t index)
 //   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called.   set_value: %d"), Timepropsstate[index].set_value);
 //   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called. f_set_value: %_f"), &f_set_value);
 //   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called. f_set_value: %d"), set_value);
-  
+
 //   // float multiplicator = float(Timepropsstate[index].set_value) / 100.0;
 //   // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutes. multiplicator: %.6f"), multiplicator);
 //   // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutes. Index: %d TimeBaseForTimeProp(index): %d Timepropsstate[index].set_value = %d. Calulation: %d"), index, TimeBaseForTimeProp(index), Timepropsstate[index].set_value);
