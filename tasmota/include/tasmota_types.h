@@ -489,6 +489,14 @@ typedef union {
 typedef union {
   uint8_t data;
   struct {
+  uint8_t timebase : 5;
+  uint8_t fallback_value : 3;
+  };
+} Timeprop;
+
+typedef union {
+  uint8_t data;
+  struct {
   uint8_t start_with_fallback : 1;
   uint8_t fallback_time : 7;
   };
@@ -843,7 +851,7 @@ typedef struct {
   uint8_t       light_step_pixels;				 // F60
   uint8_t       modbus_sbaudrate;          // F61
   uint8_t       modbus_sconfig;            // F62
-  uint8_t       timeprop[MAX_TIMEPROPS];   // F63
+  Timeprop      timeprop[MAX_TIMEPROPS];   // F63
   TimepropCfg   timeprop_cfg;              // F67
 
   uint8_t       free_f68[12];              // F68 - Decrement if adding new Setting variables just above and below

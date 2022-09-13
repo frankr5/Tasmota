@@ -22,13 +22,15 @@
 
 #define XDRV_48 48
 
-uint8_t seconds_modulo = 0; // increased every second. If dividable by 60 we have a minute
+uint8_t seconds_modulo = 0;          // increased every second. If dividable by 60 we have a minute
+uint32_t fallback_after_minutes = 0; // To keep settings low we set fallback time in hours. We need minutes
 
 struct TIMEPROPSSTATE
 {
   bool is_running = false;     // set to true with first set value
   uint8_t minutes_running = 0; // increased every minute. Reset when time base reached
   uint8_t set_value = 0;       // value that has been set via Set command
+  uint32_t last_received = 0;  // Minutes increasing. Set to zero if a command is recieved
 } Timepropsstate[MAX_TIMEPROPS];
 
 const char kTimepropCommands[] PROGMEM = D_PRFX_TIMEPROP "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_TIMEBASE "|" D_CMND_TIMEPROP_FALLBACKVALUE "|" D_CMND_TIMEPROP_STARTWITHFALLBACK "|" D_CMND_TIMEPROP_FALLBACKAFTER "|";
@@ -43,20 +45,21 @@ void (*const TimepropCommand[])(void) PROGMEM = {
 
 void TimepropInit(void)
 {
+  fallback_after_minutes = Settings->timeprop_cfg.fallback_time * 60;
+
   if (Settings->timeprop_cfg.start_with_fallback)
   {
     AddLog(LOG_LEVEL_INFO, PSTR("TPR: Init timeprop_start_with_fallback is set"));
 
     for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
     {
-      if (TimeBaseForTimeProp(i) == 0)
+      if (Settings->timeprop[i].timebase == 0)
       {
         continue;
       }
 
       Timepropsstate[i].is_running = true;
-      Timepropsstate[i].set_value = round((float)(Settings->timeprop[i] & 0x7) * (float)100 / (float)7);
-
+      Timepropsstate[i].set_value = round((float)Settings->timeprop[i].fallback_value * (float)100 / (float)7);
     }
   }
   else
@@ -71,7 +74,7 @@ void TimepropEveryMinute(void)
 {
   for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
   {
-    if (TimeBaseForTimeProp(i) == 0)
+    if (Settings->timeprop[i].timebase == 0)
     {
       continue;
     }
@@ -96,11 +99,13 @@ void TimepropEveryMinute(void)
       }
     }
 
-    // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute do something %d %d"), i, Timepropsstate[i].minutes_running);
-
     Timepropsstate[i].minutes_running++;
 
-    if (Timepropsstate[i].minutes_running >= TimeBaseForTimeProp(i))
+    Timepropsstate[i].last_received++;
+
+    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute last_received %d %d %d"), i, Timepropsstate[i].last_received, fallback_after_minutes);
+
+    if (Timepropsstate[i].minutes_running >= Settings->timeprop[i].timebase)
     {
       Timepropsstate[i].minutes_running = 0;
     }
@@ -118,17 +123,11 @@ void TimepropEverySecond(void)
   }
 }
 
-// void TimepropXdrvPower(void)
-// {
-//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropXdrvPower"));
-//   // for a single relay the state is in the lsb of index, I have think that for
-//   // multiple outputs then succesive bits will hold the state but have not been
-//   // able to test that
-//   // Tprop.current_relay_states = XdrvMailbox.index;
-// }
-
 void CmndTimepropSet(void)
 {
+
+  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropSet XdrvMailbox.index: %d"), XdrvMailbox.index);
+
   if (XdrvMailbox.index < 1 || XdrvMailbox.index > MAX_TIMEPROPS)
   {
     return;
@@ -148,6 +147,7 @@ void CmndTimepropSet(void)
 
     Timepropsstate[XdrvMailbox.index - 1].set_value = incoming_value;
     Timepropsstate[XdrvMailbox.index - 1].is_running = true;
+    Timepropsstate[XdrvMailbox.index - 1].last_received = 0;
   }
 
   ResponseCmndNumber(Timepropsstate[XdrvMailbox.index - 1].set_value);
@@ -172,13 +172,11 @@ void CmndTimepropTimeBase(void)
       return;
     }
 
-    uint8_t intermediate_fallbackvalue = Settings->timeprop[XdrvMailbox.index - 1] & 0x7;
-    Settings->timeprop[XdrvMailbox.index - 1] = incoming_value << 3;
-    Settings->timeprop[XdrvMailbox.index - 1] = Settings->timeprop[XdrvMailbox.index - 1] | intermediate_fallbackvalue;
+    Settings->timeprop[XdrvMailbox.index - 1].timebase = incoming_value;
     SettingsSave(0);
   }
 
-  ResponseCmndNumber(Settings->timeprop[XdrvMailbox.index - 1] >> 3);
+  ResponseCmndNumber(Settings->timeprop[XdrvMailbox.index - 1].timebase);
 }
 
 void CmndTimepropFallbackvalue(void)
@@ -199,14 +197,13 @@ void CmndTimepropFallbackvalue(void)
       return;
     }
 
+
     uint8_t store_value = round((float)7 * (float)incoming_value / (float)100);
-    Settings->timeprop[XdrvMailbox.index - 1] = Settings->timeprop[XdrvMailbox.index - 1] & 0xf8;
-    Settings->timeprop[XdrvMailbox.index - 1] = Settings->timeprop[XdrvMailbox.index - 1] | store_value;
-    // Settings->timeprop[XdrvMailbox.index - 1] = incoming_value << 3;
+    Settings->timeprop[XdrvMailbox.index - 1].fallback_value = store_value;
     SettingsSave(0);
   }
 
-  ResponseCmndNumber(round((float)(Settings->timeprop[XdrvMailbox.index - 1] & 0x7) * (float)100 / (float)7));
+  ResponseCmndNumber(round((float)Settings->timeprop[XdrvMailbox.index - 1].fallback_value * (float)100 / (float)7));
 }
 
 void CmndTimepropStartWithFallback(void)
@@ -231,40 +228,35 @@ void CmndTimepropStartWithFallback(void)
 void CmndTimepropFallbackAfter(void)
 {
   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropFallbackAfter called."));
+
+  if (XdrvMailbox.data_len > 0)
+  {
+    char sub_string[XdrvMailbox.data_len];
+
+    uint8_t incoming_value = atoi(subStr(sub_string, XdrvMailbox.data, ",", 1));
+    if (incoming_value < 0 || incoming_value > 127)
+    {
+      return;
+    }
+
+    Settings->timeprop_cfg.fallback_time = incoming_value;
+    SettingsSave(0);
+
+    fallback_after_minutes = incoming_value * 60;
+  }
+  ResponseCmndNumber(Settings->timeprop_cfg.fallback_time);
 }
 
 /*********************************************************************************************\
  * Helper
 \*********************************************************************************************/
-uint8_t TimeBaseForTimeProp(uint8_t index)
-{
-  return Settings->timeprop[index] >> 3;
-}
-
 uint8_t OpenMinutes(uint8_t index)
 {
-  float f_set_value = (float)Timepropsstate[index].set_value / 100.0f * (float)TimeBaseForTimeProp(index);
+  float f_set_value = (float)Timepropsstate[index].set_value / 100.0f * (float)Settings->timeprop[index].timebase;
   uint8_t set_value = round(f_set_value);
 
   return set_value;
 }
-
-// uint8_t OpenMinutesDebug(uint8_t index)
-// {
-//   float f_set_value = (float)Timepropsstate[index].set_value / 100.0f * (float)TimeBaseForTimeProp(index);
-//   uint8_t set_value = round(f_set_value);
-//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called.   set_value: %d"), Timepropsstate[index].set_value);
-//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called. f_set_value: %_f"), &f_set_value);
-//   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutesDebug called. f_set_value: %d"), set_value);
-
-//   // float multiplicator = float(Timepropsstate[index].set_value) / 100.0;
-//   // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutes. multiplicator: %.6f"), multiplicator);
-//   // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop OpenMinutes. Index: %d TimeBaseForTimeProp(index): %d Timepropsstate[index].set_value = %d. Calulation: %d"), index, TimeBaseForTimeProp(index), Timepropsstate[index].set_value);
-
-//   // return uint8_t(float(TimeBaseForTimeProp(index)) * (float(Timepropsstate[index].set_value) / float(100)));
-
-//   return 3;
-// }
 
 /*********************************************************************************************\
  * Interface
@@ -285,9 +277,6 @@ bool Xdrv48(byte function)
   case FUNC_COMMAND:
     result = DecodeCommand(kTimepropCommands, TimepropCommand);
     break;
-    // case FUNC_SET_POWER:
-    //   TimepropXdrvPower();
-    //   break;
   }
   return result;
 }
