@@ -68,9 +68,10 @@
  * Timeprop3 -> Relay3
  * Timeprop4 -> Relay4
  * ...
- * if TimepropTimeBase<x> is set to zero no POER commands will be sent to the
- * given relay.
- * But make sure no Pulse is configured for one of the relays.
+ * if TimepropTimeBase<x> is set to zero no POWER commands will be sent to the
+ * given relay and the relay can be used otherwise even with timeprop enabled.
+ * Make sure no Pulse is configured for one of the relays if TimepropTimeBase<x>
+ * is set above zero and the timeprop is used.
  *
  * The code has been written with floor heating in mind. normal cycle times
  * for this use case are between 15 and 30 minutes. In case longer times are
