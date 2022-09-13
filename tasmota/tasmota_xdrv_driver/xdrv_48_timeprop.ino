@@ -22,15 +22,19 @@
 
 #define XDRV_48 48
 
-uint8_t seconds_modulo = 0;          // increased every second. If dividable by 60 we have a minute
-uint32_t fallback_after_minutes = 0; // To keep settings low we set fallback time in hours. We need minutes
+uint32_t fallback_after_seconds = 0; // To keep settings low we set fallback time in hours. We need seconds
+bool start_with_fallback = false;    // shall we start with fallback or not
 
 struct TIMEPROPSSTATE
 {
-  bool is_running = false;     // set to true with first set value
-  uint8_t minutes_running = 0; // increased every minute. Reset when time base reached
-  uint8_t set_value = 0;       // value that has been set via Set command
-  uint32_t last_received = 0;  // Minutes increasing. Set to zero if a command is recieved
+  bool is_running = false;      // set to true with first set value
+  bool is_open = false;         // set to true with first set value
+  uint8_t set_value = 0;        // value that has been set via Set command
+  uint8_t fallback_value = 0;   // Fallback Value as set via configuration
+  uint32_t seconds_running = 0; // increased every second. Reset when time base reached
+  uint32_t last_received = 0;   // Minutes increasing. Set to zero if a command is recieved
+  uint32_t timebase = 0;        // Timebase in Seconds. In Settings is minute based. We run on seconds.
+
 } Timepropsstate[MAX_TIMEPROPS];
 
 const char kTimepropCommands[] PROGMEM = D_PRFX_TIMEPROP "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_TIMEBASE "|" D_CMND_TIMEPROP_FALLBACKVALUE "|" D_CMND_TIMEPROP_STARTWITHFALLBACK "|" D_CMND_TIMEPROP_FALLBACKAFTER "|";
@@ -45,21 +49,21 @@ void (*const TimepropCommand[])(void) PROGMEM = {
 
 void TimepropInit(void)
 {
-  fallback_after_minutes = Settings->timeprop_cfg.fallback_time * 60;
+  SyncSettings();
 
-  if (Settings->timeprop_cfg.start_with_fallback)
+  if (start_with_fallback)
   {
     AddLog(LOG_LEVEL_INFO, PSTR("TPR: Init timeprop_start_with_fallback is set"));
 
     for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
     {
-      if (Settings->timeprop[i].timebase == 0)
+      if (Timepropsstate[i].timebase == 0)
       {
         continue;
       }
 
       Timepropsstate[i].is_running = true;
-      Timepropsstate[i].set_value = round((float)Settings->timeprop[i].fallback_value * (float)100 / (float)7);
+      Timepropsstate[i].set_value = round((float)Timepropsstate[i].fallback_value * (float)100 / (float)7);
     }
   }
   else
@@ -70,11 +74,12 @@ void TimepropInit(void)
   AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop Init"));
 }
 
-void TimepropEveryMinute(void)
+void TimepropEverySecond(void)
 {
+
   for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
   {
-    if (Settings->timeprop[i].timebase == 0)
+    if (Timepropsstate[i].timebase == 0)
     {
       continue;
     }
@@ -85,48 +90,45 @@ void TimepropEveryMinute(void)
 
     if (Timepropsstate[i].set_value == 0)
     {
-      // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute set_value is zero for Number %d"), i);
+      Timepropsstate[i].is_open = false;
+
+      // AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEverySecond set_value is zero for Number %d"), i);
     }
     else
     {
-      if (Timepropsstate[i].minutes_running == 0)
+      if (Timepropsstate[i].seconds_running == 0)
       {
-        AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute start cycle %d with openening for %d minutes"), i, OpenMinutes(i));
+        Timepropsstate[i].is_open = true;
+        AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEverySecond start cycle %d with openening for %d seconds"), i, OpenSeconds(i));
       }
-      if (Timepropsstate[i].minutes_running >= OpenMinutes(i))
+      if (Timepropsstate[i].is_open == true && Timepropsstate[i].seconds_running >= OpenSeconds(i))
       {
-        AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute mid cycle %d with closing"), i);
+        Timepropsstate[i].is_open = false;
+        AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEverySecond mid cycle %d with closing"), i);
       }
     }
 
-    Timepropsstate[i].minutes_running++;
+    Timepropsstate[i].seconds_running++;
 
     Timepropsstate[i].last_received++;
 
-    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEveryMinute last_received %d %d %d"), i, Timepropsstate[i].last_received, fallback_after_minutes);
-
-    if (Timepropsstate[i].minutes_running >= Settings->timeprop[i].timebase)
+    if (Timepropsstate[i].last_received >= fallback_after_seconds)
     {
-      Timepropsstate[i].minutes_running = 0;
+      AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop TimepropEverySecond Fallback state %d %d %d"), i, Timepropsstate[i].last_received, fallback_after_seconds);
+
+      Timepropsstate[i].set_value = Timepropsstate[i].fallback_value;
+      Timepropsstate[i].last_received = 0;
     }
-  }
-}
 
-void TimepropEverySecond(void)
-{
-  seconds_modulo++;
-
-  if ((seconds_modulo % 60) == 0)
-  {
-    TimepropEveryMinute();
-    seconds_modulo = 0;
+    if (Timepropsstate[i].seconds_running >= Timepropsstate[i].timebase)
+    {
+      Timepropsstate[i].seconds_running = 0;
+    }
   }
 }
 
 void CmndTimepropSet(void)
 {
-
-  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop CmndTimepropSet XdrvMailbox.index: %d"), XdrvMailbox.index);
 
   if (XdrvMailbox.index < 1 || XdrvMailbox.index > MAX_TIMEPROPS)
   {
@@ -174,6 +176,8 @@ void CmndTimepropTimeBase(void)
 
     Settings->timeprop[XdrvMailbox.index - 1].timebase = incoming_value;
     SettingsSave(0);
+
+    SyncSettings();
   }
 
   ResponseCmndNumber(Settings->timeprop[XdrvMailbox.index - 1].timebase);
@@ -197,10 +201,11 @@ void CmndTimepropFallbackvalue(void)
       return;
     }
 
-
     uint8_t store_value = round((float)7 * (float)incoming_value / (float)100);
     Settings->timeprop[XdrvMailbox.index - 1].fallback_value = store_value;
     SettingsSave(0);
+
+    SyncSettings();
   }
 
   ResponseCmndNumber(round((float)Settings->timeprop[XdrvMailbox.index - 1].fallback_value * (float)100 / (float)7));
@@ -220,6 +225,8 @@ void CmndTimepropStartWithFallback(void)
 
     Settings->timeprop_cfg.start_with_fallback = incoming_value;
     SettingsSave(0);
+
+    SyncSettings();
   }
 
   ResponseCmndNumber(Settings->timeprop_cfg.start_with_fallback);
@@ -242,7 +249,7 @@ void CmndTimepropFallbackAfter(void)
     Settings->timeprop_cfg.fallback_time = incoming_value;
     SettingsSave(0);
 
-    fallback_after_minutes = incoming_value * 60;
+    SyncSettings();
   }
   ResponseCmndNumber(Settings->timeprop_cfg.fallback_time);
 }
@@ -250,9 +257,26 @@ void CmndTimepropFallbackAfter(void)
 /*********************************************************************************************\
  * Helper
 \*********************************************************************************************/
-uint8_t OpenMinutes(uint8_t index)
+void SyncSettings(void)
 {
-  float f_set_value = (float)Timepropsstate[index].set_value / 100.0f * (float)Settings->timeprop[index].timebase;
+  for (uint32_t i = 0; i < MAX_TIMEPROPS; i++)
+  {
+    Timepropsstate[i].fallback_value = round((float)Settings->timeprop[i].fallback_value * (float)100 / (float)7);
+    Timepropsstate[i].timebase = Settings->timeprop[i].timebase * 60;
+
+    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings timeprop %d fallback_vlaue %d."), i, Timepropsstate[i].fallback_value);
+    AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings timeprop %d timebase %d."), i, Timepropsstate[i].timebase);
+  }
+  fallback_after_seconds = Settings->timeprop_cfg.fallback_time * 25; // TODO: add 60 * 60
+  start_with_fallback = Settings->timeprop_cfg.start_with_fallback;
+
+  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings fallback_after_seconds %d."), fallback_after_seconds);
+  AddLog(LOG_LEVEL_INFO, PSTR("TPR: Timeprop SyncSettings start_with_fallback %d."), start_with_fallback);
+}
+
+uint8_t OpenSeconds(uint8_t index)
+{
+  float f_set_value = (float)Timepropsstate[index].set_value / 100.0f * (float)Timepropsstate[index].timebase;
   uint8_t set_value = round(f_set_value);
 
   return set_value;
