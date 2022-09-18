@@ -176,14 +176,14 @@ void TimepropEverySecond(void)
       // prevent quick on/off event
       if (Timepropsstate[i].open_seconds_active > 0)
       {
-        AddLog(LOG_LEVEL_INFO, PSTR("TPR: TimepropEverySecond Begining of cycle open"));
+        // AddLog(LOG_LEVEL_INFO, PSTR("TPR: TimepropEverySecond Begining of cycle open"));
         ExecuteCommandPower(i + 1, POWER_ON, SRC_IGNORE);
         Timepropsstate[i].is_open = true;
       }
     }
     if (Timepropsstate[i].seconds_running >= Timepropsstate[i].open_seconds_active && Timepropsstate[i].is_open == true)
     {
-      AddLog(LOG_LEVEL_INFO, PSTR("TPR: TimepropEverySecond mid of cycle closing"));
+      // AddLog(LOG_LEVEL_INFO, PSTR("TPR: TimepropEverySecond mid of cycle closing"));
       ExecuteCommandPower(i + 1, POWER_OFF, SRC_IGNORE);
       Timepropsstate[i].is_open = false;
     }
@@ -368,6 +368,8 @@ uint8_t FallbackValueSettingCalculated(uint8_t index)
   return fallback;
 }
 
+#ifdef USE_WEBSERVER
+
 #define WEB_HANDLE_TIMEPROP "s48"
 
 /*********************************************************************************************\
@@ -383,8 +385,8 @@ const char HTTP_FORM_TIMEPROPSTRT[] PROGMEM =
 const char HTTP_FORM_TIMEPROP_RELAY[] PROGMEM =
     "<p></p><fieldset><legend><b>&nbsp;" D_TIMEPROP_RELAY " %d &nbsp;</b></legend><p>"
     "<p><b>" D_TIMEPROP_TIMEBASE "</b> (" D_TIMEPROP_MINUTES ")<br><input id='tptb%d' placeholder='" STR(0) "' value='%d'></p>"
-                                                                                                            "<p><b>" D_TIMEPROP_FALLBACK "</b> (" D_TIMEPROP_PERCENT ")<br><input id='tpfa%d' placeholder='" STR(0) "' value='%d'></p>"
-                                                                                                                                                                                                                    "</p></fieldset>";
+    "<p><b>" D_TIMEPROP_FALLBACK "</b> (" D_TIMEPROP_PERCENT ")<br><input id='tpfa%d' placeholder='" STR(0) "' value='%d'></p>"
+    "</p></fieldset>";
 
 const char HTTP_FORM_TIMEPROPGBL[] PROGMEM =
     "<p><label><input id='tpsu' type='checkbox'%s><b>" D_TIMEPROP_STARTUPFALLBACK "</b></label><br>"
@@ -456,6 +458,8 @@ void TimePropSaveSettings(void)
   ExecuteWebCommand((char *)cmnd.c_str());
 }
 
+#endif  // USE_WEBSERVER
+
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
@@ -474,12 +478,14 @@ bool Xdrv48(byte function)
   case FUNC_COMMAND:
     result = DecodeCommand(kTimepropCommands, TimepropCommand);
     break;
+#ifdef USE_WEBSERVER
   case FUNC_WEB_ADD_BUTTON:
     WSContentSend_P(HTTP_BTN_MENU_TIMEPROP);
     break;
   case FUNC_WEB_ADD_HANDLER:
     WebServer_on(PSTR("/" WEB_HANDLE_TIMEPROP), HandleTimepropConfiguration);
     break;
+#endif  // USE_WEBSERVER
   }
   return result;
 }
