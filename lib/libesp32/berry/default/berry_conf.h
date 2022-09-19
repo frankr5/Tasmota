@@ -30,7 +30,11 @@
  * type when the value is 2.
  * Default: 2
  */
+#ifdef TASMOTA
 #define BE_INTGER_TYPE                  1           // use long int = uint32_t
+#else
+#define BE_INTGER_TYPE                  0
+#endif
 
 /* Macro: BE_USE_SINGLE_FLOAT
  * Select floating point precision.
@@ -131,7 +135,11 @@
  * will not be used.
  * Default: 0
  **/
+#ifdef TASMOTA
 #define BE_USE_FILE_SYSTEM              0
+#else
+#define BE_USE_FILE_SYSTEM              1
+#endif
 
 /* Macro: BE_USE_SCRIPT_COMPILER
  * Enable compiler when BE_USE_SCRIPT_COMPILER is not 0, otherwise
@@ -197,7 +205,11 @@
  * This options tries to move such memory areas to this region.
  * Default: 0
  **/
+#ifdef TASMOTA
 #define BE_USE_MEM_ALIGNED               1
+#else
+#define BE_USE_MEM_ALIGNED               0
+#endif
 
 /* Macro: BE_USE_XXX_MODULE
  * These macros control whether the related module is compiled.
@@ -205,20 +217,36 @@
  * point you can use the import statement to import the module.
  * They will not compile related modules when they are false.
  **/
-#define BE_USE_STRING_MODULE            1
-#define BE_USE_JSON_MODULE              1
-#define BE_USE_MATH_MODULE              1
-#define BE_USE_TIME_MODULE              0
-#define BE_USE_OS_MODULE                0
-#define BE_USE_GLOBAL_MODULE            1
-#define BE_USE_SYS_MODULE               1
-#define BE_USE_DEBUG_MODULE             0
-#define BE_USE_GC_MODULE                1
-#define BE_USE_SOLIDIFY_MODULE          0
-#define BE_USE_INTROSPECT_MODULE        1
-#define BE_USE_STRICT_MODULE            1
 
-#ifdef USE_BERRY_DEBUG
+#ifdef TASMOTA
+  #define BE_USE_STRING_MODULE            1
+  #define BE_USE_JSON_MODULE              1
+  #define BE_USE_MATH_MODULE              1
+  #define BE_USE_TIME_MODULE              0
+  #define BE_USE_OS_MODULE                0
+  #define BE_USE_GLOBAL_MODULE            1
+  #define BE_USE_SYS_MODULE               1
+  #define BE_USE_DEBUG_MODULE             0
+  #define BE_USE_GC_MODULE                1
+  #define BE_USE_SOLIDIFY_MODULE          0
+  #define BE_USE_INTROSPECT_MODULE        1
+  #define BE_USE_STRICT_MODULE            1
+#else
+  #define BE_USE_STRING_MODULE            1
+  #define BE_USE_JSON_MODULE              1
+  #define BE_USE_MATH_MODULE              1
+  #define BE_USE_TIME_MODULE              1
+  #define BE_USE_OS_MODULE                1
+  #define BE_USE_GLOBAL_MODULE            1
+  #define BE_USE_SYS_MODULE               1
+  #define BE_USE_DEBUG_MODULE             1
+  #define BE_USE_GC_MODULE                1
+  #define BE_USE_SOLIDIFY_MODULE          1
+  #define BE_USE_INTROSPECT_MODULE        1
+  #define BE_USE_STRICT_MODULE            1
+#endif
+
+#if defined(USE_BERRY_DEBUG) || !defined(TASMOTA)
   #undef BE_USE_DEBUG_MODULE
   #undef BE_USE_SOLIDIFY_MODULE
   #define BE_USE_DEBUG_MODULE             1

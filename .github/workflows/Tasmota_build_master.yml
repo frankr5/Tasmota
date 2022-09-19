@@ -58,9 +58,10 @@ jobs:
         with:
           ref: master
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
       - name: Install dependencies
         run: |
+          pip install wheel
           pip install -U platformio
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
@@ -82,9 +83,10 @@ jobs:
         with:
           ref: master
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
       - name: Install dependencies
         run: |
+          pip install wheel
           pip install -U platformio
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}-${{ matrix.language }}

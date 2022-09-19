@@ -3,7 +3,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [12.1.1.1]
+## [12.1.1.2]
+### Added
+- Berry has persistent MQTT subscriptions: auto-subscribe at (re)connection
+- Berry automated solidification of code
+- Support of optional file calib.dat on ADE7953 based energy monitors like Shelly EM (#16486)
+- Command ``SetOption46 0..255`` to add 0..255 * 10 milliseconds power on delay before initializing I/O (#15438)
+- Zigbee support for decimal Voltage/Current/Power on power metering plugs
+
+### Changed
+- ESP32 Increase number of button GPIOs from 8 to 28 (#16518)
+- IRremoteESP8266 library from v2.8.2 to v2.8.3
+- Tasmota Core32 from 2.0.4.1 to 2.0.5
+- IRremoteESP8266 library from v2.8.3 to v2.8.4
+
+### Fixed
+
+### Removed
+
+## [12.1.1.1] 20220910
 ### Added
 - Support for SGP40 gas and air quality sensor (#16341)
 - Support for Modbus writing using ModbusBridge by JeroenSt (#16351)
@@ -12,6 +30,8 @@ All notable changes to this project will be documented in this file.
 - Zigbee prepare for Green Power support (#16407)
 - Command ``SetOption146 1`` to enable display of ESP32 internal temperature
 - Support for DFRobot SEN0390 V30B ambient light sensor (#16105)
+- Command ``DspSpeed 2..127`` to control message rotation speed on display of POWR3xxD and THR3xxD
+- Command ``DspLine<1|2> <index>,<unit>,<index>,<unit>,...`` to select message(s) on display of POWR3xxD and THR3xxD
 
 ### Changed
 - TasmotaModbus library from v3.5.0 to v3.6.0 (#16351)
@@ -22,8 +42,6 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Removed whitespace from JSON values with no decimals (#16365)
 
-### Removed
-
 ## [12.1.0.1] 20220825
 ### Added
 - Zigbee device plugin mechanism with commands ``ZbLoad``, ``ZbUnload`` and ``ZbLoadDump`` (#16252)
@@ -32,10 +50,6 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - ESP32 NimBLE library from v1.3.6 to v1.4.0
-
-### Fixed
-
-### Removed
 
 ## [Released]
 

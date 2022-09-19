@@ -666,7 +666,7 @@ int32_t Z_ReceiveActiveEp(int32_t res, const SBuffer &buf) {
 const uint8_t Z_bindings[] PROGMEM = {
   Cx0001, Cx0006, Cx0008, Cx0102, Cx0201, Cx0300,
   Cx0400, Cx0402, Cx0403, Cx0405, Cx0406,
-  Cx0500,
+  Cx0500, Cx0B04,
 };
 
 int32_t Z_ClusterToCxBinding(uint16_t cluster) {
@@ -712,6 +712,11 @@ void Z_AutoBindDefer(uint16_t shortaddr, uint8_t endpoint, const SBuffer &buf,
     zigbee_devices.queueTimer(shortaddr, 0 /* groupaddr */, 2000, 0x0500, endpoint, Z_CAT_READ_ATTRIBUTE, 0x0001, &Z_SendSingleAttributeRead);
     zigbee_devices.queueTimer(shortaddr, 0 /* groupaddr */, 2000, 0x0500, endpoint, Z_CAT_CIE_ATTRIBUTE, 0 /* value */, &Z_WriteCIEAddress);
     zigbee_devices.queueTimer(shortaddr, 0 /* groupaddr */, 2000, 0x0500, endpoint, Z_CAT_CIE_ENROLL, 1 /* zone */, &Z_SendCIEZoneEnrollResponse);
+  }
+
+  // if Plug, request the multipliers and divisors for Voltage, Current and Power
+  if (bitRead(cluster_in_map, Z_ClusterToCxBinding(0x0B04))) {
+    zigbee_devices.queueTimer(shortaddr, 0 /* groupaddr */, 2000, 0x0B04, endpoint, Z_CAT_READ_ATTRIBUTE, 0 /* ignore */, &Z_SendSinglePlugMulDivAttributesRead);
   }
 
   // enqueue bind requests
@@ -1419,6 +1424,27 @@ void Z_SendSingleAttributeRead(uint16_t shortaddr, uint16_t groupaddr, uint16_t 
 }
 
 //
+// Send single attribute read request in Timer
+//
+void Z_SendSinglePlugMulDivAttributesRead(uint16_t shortaddr, uint16_t groupaddr, uint16_t cluster, uint8_t endpoint, uint32_t value) {
+  ZCLFrame zcl(12);   // message is 12 bytes
+  zcl.shortaddr = shortaddr;
+  zcl.cluster = 0x0B04;
+  zcl.dstendpoint = endpoint;
+  zcl.cmd = ZCL_READ_ATTRIBUTES;
+  zcl.clusterSpecific = false;
+  zcl.needResponse = true;
+  zcl.direct = false;   // discover route
+  zcl.payload.add16(0x0600);
+  zcl.payload.add16(0x0601);
+  zcl.payload.add16(0x0602);
+  zcl.payload.add16(0x0603);
+  zcl.payload.add16(0x0604);
+  zcl.payload.add16(0x0605);
+  zigbeeZCLSendCmd(zcl);
+}
+
+//
 // Write CIE address
 //
 void Z_WriteCIEAddress(uint16_t shortaddr, uint16_t groupaddr, uint16_t cluster, uint8_t endpoint, uint32_t value) {
@@ -1568,7 +1594,7 @@ void Z_AutoConfigReportingForCluster(uint16_t shortaddr, uint16_t groupaddr, uin
         buf.add16(min_interval);
         buf.add16(max_interval);
         if (!Z_isDiscreteDataType(attr_matched.zigbee_type)) {   // report_change is only valid for non-discrete data types (numbers)
-          ZbApplyMultiplier(report_change, attr_matched.multiplier, attr_matched.divider, attr_matched.base);
+          ZbApplyMultiplierForWrites(report_change, attr_matched.multiplier, attr_matched.divider, attr_matched.base);
           // encode value
           int32_t res = encodeSingleAttribute(buf, report_change, "", attr_matched.zigbee_type);
           if (res < 0) {

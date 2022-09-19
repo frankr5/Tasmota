@@ -49,13 +49,14 @@ const uint32_t POWER_SIZE = 32;             // Power (relay) bit count
 const uint8_t MAX_RELAYS = 8;               // Max number of relays (up to 28)
 const uint8_t MAX_INTERLOCKS = 4;           // Max number of interlock groups (up to MAX_INTERLOCKS_SET)
 const uint8_t MAX_SWITCHES = 8;             // Max number of switches (up to MAX_SWITCHES_SET)
+const uint8_t MAX_KEYS = 8;                 // Max number of keys or buttons (up to 28)
 #endif  // ESP8266
 #ifdef ESP32
 const uint8_t MAX_RELAYS = 28;              // Max number of relays (up to 28)
 const uint8_t MAX_INTERLOCKS = 14;          // Max number of interlock groups (up to MAX_INTERLOCKS_SET)
 const uint8_t MAX_SWITCHES = 28;            // Max number of switches (up to MAX_SWITCHES_SET)
+const uint8_t MAX_KEYS = 28;                // Max number of keys or buttons (up to 28)
 #endif  // ESP32
-const uint8_t MAX_KEYS = 8;                 // Max number of keys or buttons (up to 28)
 
 // Changes to the following MAX_ defines will impact settings layout
 const uint8_t MAX_INTERLOCKS_SET = 14;      // Max number of interlock groups (MAX_RELAYS / 2)
@@ -358,7 +359,7 @@ enum SO32_49Index { P_HOLD_TIME,              // SetOption32 - (Button/Switch) K
                     P_ROTARY_MAX_STEP,        // SetOption43 - (Rotary) Rotary step boundary (default 10)
                     P_IR_TOLERANCE,           // SetOption44 - (IR) Base tolerance percentage for matching incoming IR messages (default 25, max 100)
                     P_BISTABLE_PULSE,         // SetOption45 - (Bistable) Pulse time for two coil bistable latching relays (default 40)
-                    P_SO46_FREE,              // SetOption46
+                    P_POWER_ON_DELAY,         // SetOption46 - (PowerOn) Add delay of 10 x value milliseconds at power on
                     P_SO47_FREE,              // SetOption47
                     P_SO48_FREE,              // SetOption48
                     P_SO49_FREE               // SetOption49
