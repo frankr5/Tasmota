@@ -106,7 +106,6 @@ struct TIMEPROPSSTATE
   uint32_t seconds_running = 0;       // increased every second. Reset when time base reached
   uint32_t last_received = 0;         // Minutes increasing. Set to zero if a command is recieved
   uint32_t timebase = 0;              // Timebase in Seconds. In Settings is minute based. We run on seconds.
-
 } Timepropsstate[MAX_TIMEPROPS];
 
 const char kTimepropCommands[] PROGMEM = D_PRFX_TIMEPROP "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_TIMEBASE "|" D_CMND_TIMEPROP_FALLBACKVALUE "|" D_CMND_TIMEPROP_STARTWITHFALLBACK "|" D_CMND_TIMEPROP_FALLBACKAFTER "|";
@@ -238,7 +237,7 @@ void CmndTimepropSet(void)
     Timepropsstate[XdrvMailbox.index - 1].last_received = 0;
   }
 
-  ResponseCmndNumber(Timepropsstate[XdrvMailbox.index - 1].incoming_percent_value);
+  ResponseCmndIdxNumber(Timepropsstate[XdrvMailbox.index - 1].incoming_percent_value);
 }
 
 void CmndTimepropTimeBase(void)
@@ -266,7 +265,7 @@ void CmndTimepropTimeBase(void)
     SyncSettings();
   }
 
-  ResponseCmndNumber(Settings->timeprop[XdrvMailbox.index - 1].timebase);
+  ResponseCmndIdxNumber(Settings->timeprop[XdrvMailbox.index - 1].timebase);
 }
 
 void CmndTimepropFallbackvalue(void)
@@ -294,7 +293,7 @@ void CmndTimepropFallbackvalue(void)
     SyncSettings();
   }
 
-  ResponseCmndNumber(round((float)Settings->timeprop[XdrvMailbox.index - 1].fallback_value * (float)100 / (float)7));
+  ResponseCmndIdxNumber(round((float)Settings->timeprop[XdrvMailbox.index - 1].fallback_value * (float)100 / (float)7));
 }
 
 void CmndTimepropStartWithFallback(void)
