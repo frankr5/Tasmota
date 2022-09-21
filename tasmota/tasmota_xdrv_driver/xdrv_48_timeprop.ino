@@ -384,8 +384,8 @@ const char HTTP_FORM_TIMEPROPSTRT[] PROGMEM =
 const char HTTP_FORM_TIMEPROP_RELAY[] PROGMEM =
     "<p></p><fieldset><legend><b>&nbsp;" D_TIMEPROP_RELAY " %d &nbsp;</b></legend><p>"
     "<p><b>" D_TIMEPROP_TIMEBASE "</b> (" D_TIMEPROP_MINUTES ")<br><input id='tptb%d' placeholder='" STR(0) "' value='%d'></p>"
-                                                                                                            "<p><b>" D_TIMEPROP_FALLBACK "</b> (" D_TIMEPROP_PERCENT ")<br><input id='tpfa%d' placeholder='" STR(0) "' value='%d'></p>"
-                                                                                                                                                                                                                    "</p></fieldset>";
+    "<p><b>" D_TIMEPROP_FALLBACK "</b> (" D_TIMEPROP_PERCENT ")<br><input id='tpfa%d' placeholder='" STR(0) "' value='%d'></p>"
+    "</p></fieldset>";
 
 const char HTTP_FORM_TIMEPROPGBL[] PROGMEM =
     "<p><label><input id='tpsu' type='checkbox'%s><b>" D_TIMEPROP_STARTUPFALLBACK "</b></label><br>"
