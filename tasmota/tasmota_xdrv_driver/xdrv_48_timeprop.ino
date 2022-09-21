@@ -101,7 +101,7 @@ struct TIMEPROPSSTATE
   bool is_running = false;            // set to true with first set value
   bool is_open = false;               // set to true with first set value
   uint8_t incoming_percent_value = 0; // value that will be copied to set_value at next start
-  uint8_t open_seconds_active = 0;    // value that will be copied to set_value at next start
+  uint32_t open_seconds_active = 0;   // value that will be copied to set_value at next start
   uint8_t fallback_value = 0;         // Fallback Value as set via configuration
   uint32_t seconds_running = 0;       // increased every second. Reset when time base reached
   uint32_t last_received = 0;         // Minutes increasing. Set to zero if a command is recieved
@@ -194,7 +194,7 @@ void TimepropEverySecond(void)
     // FallbackAfter time can be zero. Which de facto should disable fallback at all
     if (fallback_after_seconds > 0 && Timepropsstate[i].last_received >= fallback_after_seconds)
     {
-      AddLog(LOG_LEVEL_INFO, PSTR("TPR: Fallback on Number %d to %d percent"), i+1, Timepropsstate[i].fallback_value);
+      AddLog(LOG_LEVEL_INFO, PSTR("TPR: Fallback on Number %d to %d percent"), i + 1, Timepropsstate[i].fallback_value);
 
       Timepropsstate[i].incoming_percent_value = Timepropsstate[i].fallback_value;
       Timepropsstate[i].last_received = 0;
@@ -351,10 +351,10 @@ void SyncSettings(void)
   start_with_fallback = Settings->timeprop_cfg.start_with_fallback;
 }
 
-uint8_t OpenSecondsForPercentValue(uint8_t index, uint8_t percent_value)
+uint32_t OpenSecondsForPercentValue(uint8_t index, uint8_t percent_value)
 {
   float f_set_value = (float)percent_value / 100.0f * (float)Timepropsstate[index].timebase;
-  uint8_t set_value = round(f_set_value);
+  uint32_t set_value = round(f_set_value);
 
   return set_value;
 }
@@ -384,8 +384,8 @@ const char HTTP_FORM_TIMEPROPSTRT[] PROGMEM =
 const char HTTP_FORM_TIMEPROP_RELAY[] PROGMEM =
     "<p></p><fieldset><legend><b>&nbsp;" D_TIMEPROP_RELAY " %d &nbsp;</b></legend><p>"
     "<p><b>" D_TIMEPROP_TIMEBASE "</b> (" D_TIMEPROP_MINUTES ")<br><input id='tptb%d' placeholder='" STR(0) "' value='%d'></p>"
-    "<p><b>" D_TIMEPROP_FALLBACK "</b> (" D_TIMEPROP_PERCENT ")<br><input id='tpfa%d' placeholder='" STR(0) "' value='%d'></p>"
-    "</p></fieldset>";
+                                                                                                            "<p><b>" D_TIMEPROP_FALLBACK "</b> (" D_TIMEPROP_PERCENT ")<br><input id='tpfa%d' placeholder='" STR(0) "' value='%d'></p>"
+                                                                                                                                                                                                                    "</p></fieldset>";
 
 const char HTTP_FORM_TIMEPROPGBL[] PROGMEM =
     "<p><label><input id='tpsu' type='checkbox'%s><b>" D_TIMEPROP_STARTUPFALLBACK "</b></label><br>"
@@ -457,7 +457,7 @@ void TimePropSaveSettings(void)
   ExecuteWebCommand((char *)cmnd.c_str());
 }
 
-#endif  // USE_WEBSERVER
+#endif // USE_WEBSERVER
 
 /*********************************************************************************************\
  * Interface
@@ -484,7 +484,7 @@ bool Xdrv48(byte function)
   case FUNC_WEB_ADD_HANDLER:
     WebServer_on(PSTR("/" WEB_HANDLE_TIMEPROP), HandleTimepropConfiguration);
     break;
-#endif  // USE_WEBSERVER
+#endif // USE_WEBSERVER
   }
   return result;
 }
