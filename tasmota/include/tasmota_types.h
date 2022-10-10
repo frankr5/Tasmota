@@ -486,6 +486,22 @@ typedef union {
   };
 } DisplayOptions;
 
+typedef union {
+  uint8_t data;
+  struct {
+  uint8_t timebase : 5;
+  uint8_t fallback_value : 3;
+  };
+} Timeprop;
+
+typedef union {
+  uint8_t data;
+  struct {
+  uint8_t start_with_fallback : 1;
+  uint8_t fallback_time : 7;
+  };
+} TimepropCfg;
+
 const uint32_t settings_text_size = 699;   // Settings->text_pool[size] = Settings->display_model (2D2) - Settings->text_pool (017)
 const uint8_t MAX_TUYA_FUNCTIONS = 16;
 const uint8_t PARAM8_SIZE = 18;            // Number of param bytes (SetOption)
@@ -835,8 +851,10 @@ typedef struct {
   uint8_t       light_step_pixels;				 // F60
   uint8_t       modbus_sbaudrate;          // F61
   uint8_t       modbus_sconfig;            // F62
+  Timeprop      timeprop[MAX_TIMEPROPS];   // F63
+  TimepropCfg   timeprop_cfg;              // F68
 
-  uint8_t       free_f63[13];              // F63 - Decrement if adding new Setting variables just above and below
+  uint8_t       free_f69[6];               // F69 - Decrement if adding new Setting variables just above and below
 
   // Only 32 bit boundary variables below
   uint32_t      touch_threshold;           // F70  
