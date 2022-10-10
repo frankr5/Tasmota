@@ -180,7 +180,7 @@ typedef union {                            // Restricted by MISRA-C Rule 18.4 bu
   uint32_t data;                           // Allow bit manipulation using SetOption
   struct {                                 // SetOption146 .. SetOption177
     uint32_t use_esp32_temperature : 1;    // bit 0  (v12.1.1.1) - SetOption146 - (ESP32) Show ESP32 internal temperature sensor
-    uint32_t spare01 : 1;                  // bit 1
+    uint32_t mqtt_disable_sserialrec : 1;  // bit 1  (v12.1.1.2) - SetOption147 - (MQTT) Disable publish SSerialReceived MQTT messages, you must use event trigger rules instead.
     uint32_t spare02 : 1;                  // bit 2
     uint32_t spare03 : 1;                  // bit 3
     uint32_t spare04 : 1;                  // bit 4
@@ -485,22 +485,6 @@ typedef union {
   uint8_t spare7 : 1;
   };
 } DisplayOptions;
-
-typedef union {
-  uint8_t data;
-  struct {
-  uint8_t timebase : 5;
-  uint8_t fallback_value : 3;
-  };
-} Timeprop;
-
-typedef union {
-  uint8_t data;
-  struct {
-  uint8_t start_with_fallback : 1;
-  uint8_t fallback_time : 7;
-  };
-} TimepropCfg;
 
 const uint32_t settings_text_size = 699;   // Settings->text_pool[size] = Settings->display_model (2D2) - Settings->text_pool (017)
 const uint8_t MAX_TUYA_FUNCTIONS = 16;
@@ -851,12 +835,11 @@ typedef struct {
   uint8_t       light_step_pixels;				 // F60
   uint8_t       modbus_sbaudrate;          // F61
   uint8_t       modbus_sconfig;            // F62
-  Timeprop      timeprop[MAX_TIMEPROPS];   // F63
-  TimepropCfg   timeprop_cfg;              // F67
 
-  uint8_t       free_f68[12];              // F68 - Decrement if adding new Setting variables just above and below
+  uint8_t       free_f63[13];              // F63 - Decrement if adding new Setting variables just above and below
 
   // Only 32 bit boundary variables below
+  uint32_t      touch_threshold;           // F70  
   SOBitfield6   flag6;                     // F74
   uint16_t      flowratemeter_calibration[2];// F78
   int32_t       energy_kWhexport_ph[3];    // F7C
