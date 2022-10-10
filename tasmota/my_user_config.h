@@ -361,6 +361,7 @@
 #define ZIGBEE_DISTINCT_TOPICS false             // [SetOption89] Enable unique device topic based on Zigbee device ShortAddr
 #define ZIGBEE_RMV_ZBRECEIVED  false             // [SetOption100] Remove ZbReceived form JSON message
 #define ZIGBEE_INDEX_EP        false             // [SetOption101] Add the source endpoint as suffix to attributes, ex `Power3` instead of `Power` if sent from endpoint 3
+#define ZIGBEE_TOPIC_FNAME     false             // [SetOption112] Enable friendly name in Zigbee topic (use with ZIGBEE_DISTINCT_TOPICS)
 
 /*********************************************************************************************\
  * END OF SECTION 1
@@ -427,6 +428,7 @@
 
 #define MQTT_TELE_RETAIN       0                 // Tele messages may send retain flag (0 = off, 1 = on)
 #define MQTT_CLEAN_SESSION     1                 // Mqtt clean session connection (0 = No clean session, 1 = Clean session (default))
+#define MQTT_DISABLE_SSERIALRECEIVED 0           // 1 = Disable sserialreceived mqtt messages, 0 = Enable sserialreceived mqtt messages (default)
 
 // -- MQTT - Domoticz -----------------------------
 #define USE_DOMOTICZ                             // Enable Domoticz (+6k code, +0.3k mem)
@@ -577,6 +579,7 @@
 // -- One wire sensors ----------------------------
 #define USE_DS18x20                              // Add support for DS18x20 sensors with id sort, single scan and read retry (+2k6 code)
 //  #define W1_PARASITE_POWER                      // Optimize for parasite powered sensors
+//  #define DS18x20_USE_ID_ALIAS
 
 // -- I2C sensors ---------------------------------
 #define USE_I2C                                  // I2C using library wire (+10k code, 0k2 mem, 124 iram)
@@ -682,6 +685,8 @@
 //  #define USE_DS3502                             // [I2CDriver67] Enable DS3502 digital potentiometer (I2C address 0x28 - 0x2B) (+0k4 code)
 //  #define USE_HYT                                // [I2CDriver68] Enable HYTxxx temperature and humidity sensor (I2C address 0x28) (+0k5 code)
 //  #define USE_LUXV30B                            // [I2CDriver70] Enable RFRobot SEN0390 LuxV30b ambient light sensor (I2C address 0x4A) (+0k5 code)
+//  #define USE_QMC5883L                           // [I2CDriver71] Enable QMC5883L magnetic induction sensor (I2C address 0x0D) (+0k8 code)
+//    #define QMC5883L_TEMP_SHIFT       23         // sensor temperature are not calibrated (only relativ measurement) and need an absolute ground value in °C (see datasheet)
 
 //  #define USE_RTC_CHIPS                          // Enable RTC chip support and NTP server - Select only one
 //    #define USE_DS3231                           // [I2cDriver26] Enable DS3231 RTC (I2C address 0x68) (+1k2 code)
@@ -736,6 +741,8 @@
 //  #define USE_RC522                              // Add support for MFRC522 13.56Mhz Rfid reader (+6k code)
 //    #define USE_RC522_DATA_FUNCTION              // Add support for reading data block content (+0k4 code)
 //    #define USE_RC522_TYPE_INFORMATION           // Add support for showing card type (+0k4 code)
+//  #define USE_MCP2515                            // Add support for can bus using MCP2515 (+7k code)
+//  #define USE_CANSNIFFER                         // Add support for can bus sniffer using MCP2515 (+5k code)
 
 #endif  // USE_SPI
 
@@ -757,8 +764,8 @@
   #define SR04_MAX_SENSOR_DISTANCE  500          // Set sensor max detection distance
 //#define USE_DYP                                  // Add support for DYP ME-007 ultrasonic distance sensor, serial port version (+0k5 code)
 #define USE_SERIAL_BRIDGE                        // Add support for software Serial Bridge (+0k8 code)
-//#define USE_MODBUS_BRIDGE                        // Add support for software Modbus Bridge (+3k code)
-//#define USE_MODBUS_BRIDGE_TCP                    // Add support for software Modbus TCP Bridge (Also enable Modbus Bridge!) (? code)
+//#define USE_MODBUS_BRIDGE                        // Add support for software Modbus Bridge (+4.5k code)
+//#define USE_MODBUS_BRIDGE_TCP                    // Add support for software Modbus TCP Bridge (also enable Modbus TCP Bridge) (+2k code)
 //#define USE_TCP_BRIDGE                           //  Add support for Serial to TCP bridge (+1.3k code)
 //#define USE_MP3_PLAYER                           // Use of the DFPlayer Mini MP3 Player RB-DFR-562 commands: play, pause, stop, track, volume and reset
   #define MP3_VOLUME           30                // Set the startup volume on init, the range can be 0..100(max)
@@ -1012,6 +1019,13 @@
 #ifdef ESP32
 
 #define SET_ESP32_STACK_SIZE  (8 * 1024)         // Set the stack size for Tasmota. The default value is 8192 for Arduino, some builds might need to increase it
+
+#ifdef SOC_TOUCH_VERSION_1                       // ESP32
+  #define ESP32_TOUCH_THRESHOLD   40             // [TouchThres] Below this level a touch is detected
+#endif
+#ifdef SOC_TOUCH_VERSION_2                       // ESP32-S2 and ESP32-S3
+  #define ESP32_TOUCH_THRESHOLD   40000          // [TouchThres] Above this level a touch is detected
+#endif
 
 #define USE_ESP32_SENSORS                        // Add support for ESP32 temperature and optional hall effect sensor
 

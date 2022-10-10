@@ -112,6 +112,7 @@ public:
     _linkquality(linkquality), _securityuse(securityuse), _seqnumber(seqnumber)
     {
       _frame_control.d8 = frame_control;
+      direction = _frame_control.b.direction;
       clusterSpecific = (_frame_control.b.frame_type != 0);
       needResponse = !_frame_control.b.disable_def_resp;
       payload.addBuffer(buf, buf_len);
@@ -131,7 +132,7 @@ public:
                     srcendpoint, dstendpoint, _wasbroadcast,
                     _linkquality, _securityuse, _seqnumber,
                     _frame_control,
-                    _frame_control.b.frame_type, _frame_control.b.direction, _frame_control.b.disable_def_resp,
+                    _frame_control.b.frame_type, direction, _frame_control.b.disable_def_resp,
                     manuf, transactseq, cmd,
                     &payload);
     if (Settings->flag3.tuya_serial_mqtt_publish) {
@@ -165,14 +166,14 @@ public:
     return zcl_frame;
   }
 
-  bool isClusterSpecificCommand(void) {
-    return _frame_control.b.frame_type & 1;
-  }
+  bool isClusterSpecificCommand(void) const { return _frame_control.b.frame_type & 1; }
+  uint8_t getDirection(void)          const { return direction; }
 
   // parsers for received messages
   void parseReportAttributes(Z_attribute_list& attr_list);
   void generateSyntheticAttributes(Z_attribute_list& attr_list);
   void removeInvalidAttributes(Z_attribute_list& attr_list);
+  void applySynonymAttributes(Z_attribute_list& attr_list);
   void computeSyntheticAttributes(Z_attribute_list& attr_list);
   void generateCallBacks(Z_attribute_list& attr_list);
   void parseReadAttributes(uint16_t shortaddr, Z_attribute_list& attr_list);
@@ -700,11 +701,11 @@ void ZCLFrame::removeInvalidAttributes(Z_attribute_list& attr_list) {
   }
 }
 
+
 //
-// Compute new attributes based on the standard set
-// Note: both function are now split to compute on extracted attributes
+// Apply synonyms from the plug-in synonym definitions
 //
-void ZCLFrame::computeSyntheticAttributes(Z_attribute_list& attr_list) {
+void ZCLFrame::applySynonymAttributes(Z_attribute_list& attr_list) {
   Z_Device & device = zigbee_devices.findShortAddr(shortaddr);
 
   String modelId((char*) device.modelId);
@@ -732,6 +733,20 @@ void ZCLFrame::computeSyntheticAttributes(Z_attribute_list& attr_list) {
         attr.setFloat(fval);
       }
     }
+  }
+}
+
+//
+// Compute new attributes based on the standard set
+// Note: both function are now split to compute on extracted attributes
+//
+void ZCLFrame::computeSyntheticAttributes(Z_attribute_list& attr_list) {
+  Z_Device & device = zigbee_devices.findShortAddr(shortaddr);
+
+  String modelId((char*) device.modelId);
+  // scan through attributes and apply specific converters
+  for (auto &attr : attr_list) {
+    if (attr.key_is_str) { continue; }    // pass if key is a name
 
     uint32_t ccccaaaa = (attr.cluster << 16) | attr.attr_id;
 
@@ -1127,17 +1142,26 @@ void ZCLFrame::parseClusterSpecificCommand(Z_attribute_list& attr_list) {
     device.debounce_transact = transactseq;
     zigbee_devices.setTimer(shortaddr, 0 /* groupaddr */, USE_ZIGBEE_DEBOUNCE_COMMANDS, 0 /*clusterid*/, srcendpoint, Z_CAT_DEBOUNCE_CMD, 0, &Z_ResetDebounce);
 
-    convertClusterSpecific(attr_list, cluster, cmd, _frame_control.b.direction, shortaddr, srcendpoint, payload);
-    if (!Settings->flag5.zb_disable_autoquery) {
-    // read attributes unless disabled
-      if (!_frame_control.b.direction) {    // only handle server->client (i.e. device->coordinator)
-        if (_wasbroadcast) {                // only update for broadcast messages since we don't see unicast from device to device and we wouldn't know the target
-          sendHueUpdate(BAD_SHORTADDR, groupaddr, cluster);
+    bool cmd_parsed = false;
+    if (srcendpoint == 0xF2 && dstendpoint == 0xF2 && cluster == 0x0021) {
+      // handle Green Power commands
+      cmd_parsed = convertGPSpecific(attr_list, cmd, direction, shortaddr, _wasbroadcast, payload);
+    }
+    // was it successfully parsed already?
+    if (!cmd_parsed) {
+      // handle normal commands
+      convertClusterSpecific(attr_list, cluster, cmd, direction, shortaddr, srcendpoint, payload);
+      if (!Settings->flag5.zb_disable_autoquery) {
+      // read attributes unless disabled
+        if (!direction) {    // only handle server->client (i.e. device->coordinator)
+          if (_wasbroadcast) {                // only update for broadcast messages since we don't see unicast from device to device and we wouldn't know the target
+            sendHueUpdate(BAD_SHORTADDR, groupaddr, cluster);
+          }
         }
       }
     }
   }
-  // Send Default Response to acknowledge the attribute reporting
+  // Send Default Response to acknowledge the command
   if (0 == _frame_control.b.disable_def_resp) {
     // the device expects a default response
     ZCLFrame zcl(2);   // message is 4 bytes
@@ -1463,15 +1487,20 @@ void Z_postProcessAttributes(uint16_t shortaddr, uint16_t src_ep, class Z_attrib
       uint16_t cluster = attr.cluster;
       uint16_t attribute = attr.attr_id;
       uint32_t ccccaaaa = (attr.cluster << 16) | attr.attr_id;
-
       // Look for an entry in the converter table
       bool found = false;
 
       // first search in device plug-ins
-      const Z_attribute_match matched_attr = Z_findAttributeMatcherById(shortaddr, cluster, attribute, true);
+      Z_attribute_match matched_attr = Z_findAttributeMatcherById(shortaddr, cluster, attribute, true);
       found = matched_attr.found();
+      // special case for Tuya attributes, also search for type `FF` if not found
+      if (!found && cluster == 0xEF00) {
+        // search for attribute `FFxx` for wildcard types
+        matched_attr = Z_findAttributeMatcherById(shortaddr, cluster, 0xFF00 | (attribute & 0x00FF), true);
+        found = matched_attr.found();
+      }
 
-      float    fval   = attr.getFloat();
+      float fval = attr.getFloat();
       if (found && (matched_attr.map_type != Z_Data_Type::Z_Unknown)) {
         // We apply an automatic mapping to Z_Data_XXX object
         // First we find or instantiate the correct Z_Data_XXX according to the endpoint

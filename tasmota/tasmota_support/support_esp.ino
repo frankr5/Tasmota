@@ -116,6 +116,10 @@ String GetDeviceHardwareRevision(void) {
   return GetDeviceHardware();
 }
 
+String GetCodeCores(void) {
+  return F("");
+}
+
 #endif
 
 /*********************************************************************************************\
@@ -672,22 +676,7 @@ void *special_malloc32(uint32_t size) {
 }
 
 float CpuTemperature(void) {
-#ifdef CONFIG_IDF_TARGET_ESP32
   return (float)temperatureRead();  // In Celsius
-/*
-  // These jumps are not stable either. Sometimes it jumps to 77.3
-  float t = (float)temperatureRead();  // In Celsius
-  if (t > 81) { t = t - 27.2; }        // Fix temp jump observed on some ESP32 like DualR3
-  return t;
-*/
-#else
-    // Currently (20210801) repeated calls to temperatureRead() on ESP32C3 and ESP32S2 result in IDF error messages
-    static float t = NAN;
-    if (isnan(t)) {
-      t = (float)temperatureRead();  // In Celsius
-    }
-    return t;
-#endif
 }
 
 /*
@@ -805,7 +794,9 @@ typedef struct {
       case 3:
         if (single_core) { return F("ESP32-S0WD-OEM"); }   // Max 160MHz, Single core, QFN 5*5, Xiaomi Yeelight
         else {             return F("ESP32-D0WD-OEM"); }   // Max 240MHz, Dual core, QFN 5*5
-      case 4:              return F("ESP32-U4WDH");        // Max 160MHz, Single core, QFN 5*5, 4MB embedded flash, ESP32-MINI-1, ESP32-DevKitM-1
+      case 4:
+        if (single_core) { return F("ESP32-U4WDH-S"); }    // Max 160MHz, Single core, QFN 5*5, 4MB embedded flash, ESP32-MINI-1, ESP32-DevKitM-1
+        else {             return F("ESP32-U4WDH-D"); }    // Max 240MHz, Dual core, QFN 5*5, 4MB embedded flash
       case 5:
         if (rev3)        { return F("ESP32-PICO-V3"); }    // Max 240MHz, Dual core, LGA 7*7, ESP32-PICO-V3-ZERO, ESP32-PICO-V3-ZERO-DevKit
         else {             return F("ESP32-PICO-D4"); }    // Max 240MHz, Dual core, LGA 7*7, 4MB embedded flash, ESP32-PICO-KIT
@@ -944,6 +935,14 @@ String GetDeviceHardwareRevision(void) {
   result += revision;                    // ESP32-C3 rev.3
 
   return result;
+}
+
+String GetCodeCores(void) {
+#if defined(CORE32SOLO1)
+  return F("single-core");
+#else
+  return F("");
+#endif
 }
 
 /*

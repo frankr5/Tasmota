@@ -233,7 +233,10 @@
 #define D_JSON_SIGNALSTRENGTH "SignalStrength"
 #define D_JSON_CHIPTEMPERATURE "ChipTemperature"
 #define D_JSON_RAW "Raw"
-
+#define D_JSON_MX "XaxisInduction"
+#define D_JSON_MY "YaxisInduction"
+#define D_JSON_MZ "ZaxisInduction"
+#define D_JSON_MAGNETICFLD "MagneticInduction"
 #define D_RSLT_ENERGY "ENERGY"
 #define D_RSLT_HASS_STATE "HASS_STATE"
 #define D_RSLT_INFO "INFO"
@@ -619,9 +622,11 @@
   #define D_JSON_ZIGBEE_EZSP_SENT "ZbEZSPSent"
   #define D_JSON_ZIGBEE_EZSP_SENT_RAW "ZbEZSPSentRaw"
   #define D_JSON_ZIGBEEZCL_RECEIVED "ZbZCLReceived"
+  #define D_JSON_ZIGBEEGP_RECEIVED "ZbGPReceived"
   #define D_JSON_ZIGBEEZCL_RAW_RECEIVED "ZbZCLRawReceived"
   #define D_JSON_ZIGBEE_DEVICE "Device"
   #define D_JSON_ZIGBEE_NAME "Name"
+  #define D_JSON_ZIGBEE_NAMES "Names"
   #define D_JSON_ZIGBEE_CONFIRM "ZbConfirm"
 #define D_CMND_ZIGBEE_NAME "Name"
 #define D_CMND_ZIGBEE_MODELID "ModelId"
@@ -757,6 +762,9 @@
 
 // Commands xsns_02_analog.ino
 #define D_CMND_ADCPARAM "AdcParam"
+
+// Commands xsns_05_ds18x20.ino
+#define D_CMND_DS_ALIAS "DS18Alias"
 
 // xsns_70_veml6075.ino
 #define D_JSON_UVA_INTENSITY "UvaIntensity"

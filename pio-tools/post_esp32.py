@@ -18,8 +18,6 @@
 # - 0xe0000 | ~\Tasmota\.pio\build\<env name>/firmware.bin
 # - 0x3b0000| ~\Tasmota\.pio\build\<env name>/littlefs.bin
 
-Import("env")
-
 env = DefaultEnvironment()
 platform = env.PioPlatform()
 
@@ -35,7 +33,16 @@ import subprocess
 sys.path.append(join(platform.get_package_dir("tool-esptoolpy")))
 import esptool
 
-FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
+extra_flags = ''.join([element.replace("-D", " ") for element in env.BoardConfig().get("build.extra_flags", "")])
+build_flags = ''.join([element.replace("-D", " ") for element in env.GetProjectOption("build_flags")])
+
+if "CORE32SOLO1" in extra_flags or "FRAMEWORK_ARDUINO_SOLO1" in build_flags:
+    FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-solo1")
+elif "CORE32ITEAD" in extra_flags or "FRAMEWORK_ARDUINO_ITEAD" in build_flags:
+    FRAMEWORK_DIR = platform.get_package_dir("framework-arduino-ITEAD")
+else:
+    FRAMEWORK_DIR = platform.get_package_dir("framework-arduinoespressif32")
+
 variants_dir = join(FRAMEWORK_DIR, "variants", "tasmota")
 
 def esp32_create_chip_string(chip):

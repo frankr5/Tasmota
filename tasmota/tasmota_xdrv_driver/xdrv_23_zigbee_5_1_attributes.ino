@@ -264,6 +264,28 @@ EF00_0372,last_irrigation_duration
 
 */
 
+void Z_setString(char*& attr, const char * str) {
+  if (nullptr == str)  { str = PSTR(""); }    // nullptr is considered empty string
+  size_t str_len = strlen(str);
+
+  if ((nullptr == attr) && (0 == str_len)) { return; } // if both empty, don't do anything
+  if (attr) {
+    // we already have a value
+    if (strcmp(attr, str) != 0) {
+      // new value
+      free(attr);      // free previous value
+      attr = nullptr;
+    } else {
+      return;        // same value, don't change anything
+    }
+  }
+  if (str_len) {
+    if (str_len > 31) { str_len = 31; }
+    attr = (char*) malloc(str_len + 1);
+    strlcpy(attr, str, str_len + 1);
+  }
+}
+
 //
 //
 // Class for a single attribute from a plugin
@@ -275,12 +297,22 @@ public:
   Z_plugin_attribute(void) :
     type(Zunk),
     multiplier(1), divider(1), base(0),
-    cluster(0xFFFF), attribute(0xFFFF), manuf(0)
+    cluster(0xFFFF), attribute(0xFFFF), manuf(0),
+    name(nullptr)
     {};
+  
+  ~Z_plugin_attribute(void) {
+    if (name != nullptr) { free((void*)name); }
+  }
 
-  void set(uint16_t cluster, uint16_t attribute, const char *name, uint8_t type = Zunk) {
+  inline void setName(const char *_name) {
+    Z_setString(this->name, _name);
+  }
+
+  void set(uint16_t cluster, uint16_t attribute, const char *_name, uint8_t type = Zunk) {
     this->cluster = cluster;
     this->attribute = attribute;
+    Z_setString(this->name, _name);
     this->name = name;
     this->type = type;
   }
@@ -292,7 +324,7 @@ public:
   uint16_t      cluster;          // cluster number
   uint16_t      attribute;        // attribute number
   uint16_t      manuf;            // manufacturer code, 0 if none
-  String        name;             // name of attribute once converted
+  char *        name;             // name of attribute once converted
 };
 
 //
@@ -337,28 +369,62 @@ public:
 
   Z_plugin_matcher(void) {};
 
-  inline void setModelManuf(const char *_model, const char *_manuf) {
-    model = (const char*)_model;
-    manufacturer = (const char*)_manuf;
+  inline void setModel(const char *_model) {
+    Z_setString(this->model, _model);
+  }
+
+
+  inline void setManuf(const char *_manuf) {
+    Z_setString(this->manufacturer, _manuf);
+  }
+
+  ~Z_plugin_matcher(void) {
+    if (model) { free((void*)model); }
+    if (manufacturer) { free((void*)manufacturer); }
+  }
+
+  // check if a matches b, return true if so
+  //
+  // Special behavior:
+  // - return true if `a` is empty or null
+  // - return false if `b` is null
+  // - matches start of `a` if `a` ends with `'*'`
+  // - exact match otherwise
+  static bool matchStar(const char *_a, const char *_b) {
+    if (_a == nullptr || *_a == '\0') { return true; }
+    if (_b == nullptr) { return false; }
+
+    const char *a = _a;
+    const char *b = _b;
+    while (1) {
+      if (a[0] == '*' && a[1] == '\0') {  // pattern ends with '*'
+        return true;    // matches worked until now, accept match
+      }
+      if (*a != *b) {
+        return false;
+      }
+      if (*a == '\0') {
+        return true;
+      }
+      a++;
+      b++;
+    }
   }
 
   bool match(const char *match_model, const char *match_manuf) const {
     bool match = true;
-    if (model.length() > 0) {
-      if (!model.equals(match_model)) {
-        match = false;
-      }
+    if (!matchStar(model, match_model)) {
+      match = false;
     }
-    if (manufacturer.length() > 0) {
-      if (!manufacturer.equals(match_manuf)) {
+    if (!matchStar(manufacturer, match_manuf)) {
         match = false;
-      }
     }
+    // AddLog(LOG_LEVEL_DEBUG, ">match device(%s, %s) compared to (%s, %s) = %i", match_model, match_manuf, model ? model : "", manufacturer ? manufacturer : "", match);
     return match;
   }
 
-  String        model;
-  String        manufacturer;
+  char *        model = nullptr;
+  char *        manufacturer = nullptr;
 };
 
 //
@@ -443,7 +509,7 @@ const Z_plugin_attribute * Z_plugin_templates::matchAttributeByName(const char *
       if (mtch.match(model, manufacturer)) {
         // got a match, apply template
         for (const Z_plugin_attribute & attr : attributes) {
-          if (attr.name.equals(name)) {
+          if (0 == strcasecmp_P(name, attr.name ? attr.name : "")) {
             return &attr;
           }
         }
@@ -753,6 +819,7 @@ const Z_AttributeConverter Z_PostProcess[] PROGMEM = {
   { Zuint16,  Cx0020, 0x0006,  Z_(FastPollTimeoutMax),   Cm1, 0 },
 
   // Green Power
+  // Server attributes
   { Zuint8,   Cx0021, 0x0000,  Z_(MaxSinkTableEntries),  Cm1, 0 },
   { Zoctstr16,Cx0021, 0x0001,  Z_(SinkTable),            Cm1, 0 },
   { Zmap8,    Cx0021, 0x0002,  Z_(CommunicationMode),    Cm1, 0 },
@@ -769,6 +836,7 @@ const Z_AttributeConverter Z_PostProcess[] PROGMEM = {
   { Zoctstr16,Cx0021, 0x0015,  Z_(BlockedGPDID),         Cm1, 0 },
   { Zmap24,   Cx0021, 0x0016,  Z_(ClientFunctionality),  Cm1, 0 },
   { Zmap24,   Cx0021, 0x0017,  Z_(ClientActiveFunctionality),  Cm1, 0 },
+  // Shared by Server and Client
   { Zmap8,    Cx0021, 0x0020,  Z_(SharedSecurityKeyType),Cm1, 0 },
   { Zkey128,  Cx0021, 0x0021,  Z_(SharedSecurityKey),    Cm1, 0 },
   { Zkey128,  Cx0021, 0x0022,  Z_(LinkKey),  Cm1, 0 },

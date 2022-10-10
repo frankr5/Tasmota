@@ -3,23 +3,49 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - Development
 
-## [12.1.1.2]
+## [12.1.1.4]
+### Added
+- Support for Shelly Plus 2PM using template ``{"NAME":"Shelly Plus 2PM PCB v0.1.9","GPIO":[320,0,0,0,32,192,0,0,225,224,0,0,0,0,193,0,0,0,0,0,0,608,640,3458,0,0,0,0,0,9472,0,4736,0,0,0,0],"FLAG":0,"BASE":1,"CMND":"AdcParam1 2,10000,10000,3350"}``
+- Zigbee Alexa/Hue emulation, support multiple switches on separate endpoints (#16718)
+- Support for QMC5883L magnetic induction sensor by Helge Scheunemann (#16714)
+- LVGL/HASPmota add tiny "pixel perfect" fonts for small screens (#16758)
+- HASPmota support for TTF fonts (#16759)
+- Support for Modbus Energy Monitoring devices using a rule file. See ``xnrg_29_modbus.ino`` for more information
+
+### Changed
+- ESP32 LVGL library from v8.3.0 to v8.3.2
+- Increase serial console fixed input buffer size from 520 to 800
+
+### Fixed
+
+### Removed
+
+## [12.1.1.3] 20221003
+### Added
+- ESP32-S2 and ESP32-S3 touch button support
+- Zigbee friendly names per endpoint
+
+### Fixed
+- ESP32 touch button multi-press and hold detection (#16596)
+
+## [12.1.1.2] 20220927
 ### Added
 - Berry has persistent MQTT subscriptions: auto-subscribe at (re)connection
 - Berry automated solidification of code
 - Support of optional file calib.dat on ADE7953 based energy monitors like Shelly EM (#16486)
 - Command ``SetOption46 0..255`` to add 0..255 * 10 milliseconds power on delay before initializing I/O (#15438)
 - Zigbee support for decimal Voltage/Current/Power on power metering plugs
+- Command ``UrlFetch <url>`` to download a file to filesystem
+- Zigbee basic support for Green Power
+- Berry add ``introspect.setmodule(name:string, value:any) -> nil``
 
 ### Changed
 - ESP32 Increase number of button GPIOs from 8 to 28 (#16518)
 - IRremoteESP8266 library from v2.8.2 to v2.8.3
 - Tasmota Core32 from 2.0.4.1 to 2.0.5
 - IRremoteESP8266 library from v2.8.3 to v2.8.4
-
-### Fixed
-
-### Removed
+- Zigbee report unprocessed attributes
+- Platformio one Platform for all Tasmota frameworks Core32 2.0.5 (#16644)
 
 ## [12.1.1.1] 20220910
 ### Added

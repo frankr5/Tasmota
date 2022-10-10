@@ -838,6 +838,7 @@ void SettingsDefaultSet2(void) {
   SOBitfield3  flag3 = { 0 };
   SOBitfield4  flag4 = { 0 };
   SOBitfield5  flag5 = { 0 };
+  SOBitfield6  flag6 = { 0 };
   SysMBitfield1  flag2 = { 0 };
   SysMBitfield2  mbflag2 = { 0 };
 
@@ -975,6 +976,9 @@ void SettingsDefaultSet2(void) {
   flag.button_swap |= KEY_SWAP_DOUBLE_PRESS;
   flag.button_single |= KEY_ONLY_SINGLE_PRESS;
   Settings->param[P_HOLD_TIME] = KEY_HOLD_TIME;  // Default 4 seconds hold time
+#if defined(SOC_TOUCH_VERSION_1) || defined(SOC_TOUCH_VERSION_2)
+  Settings->touch_threshold = ESP32_TOUCH_THRESHOLD;
+#endif  // ESP32 SOC_TOUCH_VERSION_1 or SOC_TOUCH_VERSION_2
 
   // Switch
   for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) { Settings->switchmode[i] = SWITCH_MODE; }
@@ -992,6 +996,7 @@ void SettingsDefaultSet2(void) {
   flag5.mqtt_status_retain |= MQTT_STATUS_RETAIN;
   flag5.mqtt_switches |= MQTT_SWITCHES;
   flag5.mqtt_persistent |= ~MQTT_CLEAN_SESSION;
+  flag6.mqtt_disable_sserialrec |= MQTT_DISABLE_SSERIALRECEIVED;
 //  flag.mqtt_serial |= 0;
   flag.device_index_enable |= MQTT_POWER_FORMAT;
   flag3.time_append_timezone |= MQTT_APPEND_TIMEZONE;
@@ -1238,6 +1243,7 @@ void SettingsDefaultSet2(void) {
   flag4.zigbee_distinct_topics |= ZIGBEE_DISTINCT_TOPICS;
   flag4.remove_zbreceived |= ZIGBEE_RMV_ZBRECEIVED;
   flag4.zb_index_ep |= ZIGBEE_INDEX_EP;
+  flag4.zb_topic_fname |= ZIGBEE_TOPIC_FNAME;
   flag4.mqtt_tls |= MQTT_TLS_ENABLED;
   flag4.mqtt_no_retain |= MQTT_NO_RETAIN;
 
@@ -1253,6 +1259,7 @@ void SettingsDefaultSet2(void) {
   Settings->flag3 = flag3;
   Settings->flag4 = flag4;
   Settings->flag5 = flag5;
+  Settings->flag6 = flag6;
 }
 
 void SettingsDefaultSet3(void) {
@@ -1569,6 +1576,11 @@ void SettingsDelta(void) {
     if (Settings->version < 0x0C000204) {  // 12.0.2.4
       Settings->param[P_BISTABLE_PULSE] = APP_BISTABLE_PULSE;
     }
+#if defined(SOC_TOUCH_VERSION_1) || defined(SOC_TOUCH_VERSION_2)
+    if (Settings->version < 0x0C010103) {  // 12.1.1.3
+      Settings->touch_threshold = ESP32_TOUCH_THRESHOLD;
+    }
+#endif  // ESP32 SOC_TOUCH_VERSION_1 or SOC_TOUCH_VERSION_2
 
     Settings->version = VERSION;
     SettingsSave(1);

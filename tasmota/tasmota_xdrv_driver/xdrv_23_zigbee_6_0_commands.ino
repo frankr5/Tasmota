@@ -145,6 +145,60 @@ const Z_CommandConverter Z_Commands[] PROGMEM = {
   { Z_(),               0xEF00, 0xFF, 0x83,   Z_() },             // capture any command in 0xEF00 cluster
   // Terncy specific
   { Z_(),               0xFCCC, 0x00, 0x82,   Z_(xxyy) },         // Terncy button (multi-)press
+  // Green Power - for display only
+  { Z_(GPIdentify),     0xF021, 0x00, 0x01,   Z_() },
+  { Z_(GPScene0),       0xF021, 0x10, 0x01,   Z_() },
+  { Z_(GPScene1),       0xF021, 0x11, 0x01,   Z_() },
+  { Z_(GPScene2),       0xF021, 0x12, 0x01,   Z_() },
+  { Z_(GPScene3),       0xF021, 0x13, 0x01,   Z_() },
+  { Z_(GPScene4),       0xF021, 0x14, 0x01,   Z_() },
+  { Z_(GPScene5),       0xF021, 0x15, 0x01,   Z_() },
+  { Z_(GPScene6),       0xF021, 0x16, 0x01,   Z_() },
+  { Z_(GPScene7),       0xF021, 0x17, 0x01,   Z_() },
+  { Z_(GPScene8),       0xF021, 0x18, 0x01,   Z_() },
+  { Z_(GPScene9),       0xF021, 0x19, 0x01,   Z_() },
+  { Z_(GPScene10),      0xF021, 0x1A, 0x01,   Z_() },
+  { Z_(GPScene11),      0xF021, 0x1B, 0x01,   Z_() },
+  { Z_(GPScene12),      0xF021, 0x1C, 0x01,   Z_() },
+  { Z_(GPScene13),      0xF021, 0x1D, 0x01,   Z_() },
+  { Z_(GPScene14),      0xF021, 0x1E, 0x01,   Z_() },
+  { Z_(GPScene15),      0xF021, 0x1F, 0x01,   Z_() },
+  { Z_(GPOff),          0xF021, 0x20, 0x01,   Z_() },
+  { Z_(GPOn),           0xF021, 0x21, 0x01,   Z_() },
+  { Z_(GPToggle),       0xF021, 0x22, 0x01,   Z_() },
+  { Z_(GPRelease),      0xF021, 0x23, 0x01,   Z_() },
+  { Z_(GPMoveUp),       0xF021, 0x30, 0x01,   Z_(xx) },
+  { Z_(GPMoveDown),     0xF021, 0x31, 0x01,   Z_(xx) },
+  { Z_(GPStepUp),       0xF021, 0x32, 0x01,   Z_(xx) },
+  { Z_(GPStepDown),     0xF021, 0x33, 0x01,   Z_(xx) },
+  { Z_(GPLevelStop),    0xF021, 0x34, 0x01,   Z_() },
+  { Z_(GPMoveUpOnOff),  0xF021, 0x35, 0x01,   Z_(xx) },
+  { Z_(GPMoveDownOnOff),0xF021, 0x36, 0x01,   Z_(xx) },
+  { Z_(GPStepUpOnOff),  0xF021, 0x37, 0x01,   Z_(xx) },
+  { Z_(GPStepDownOnOff),0xF021, 0x38, 0x01,   Z_(xx) },
+  { Z_(GPHueStop),      0xF021, 0x40, 0x01,   Z_() },
+  { Z_(GPMoveHueUp),    0xF021, 0x41, 0x01,   Z_(xx) },
+  { Z_(GPMoveHueDown),  0xF021, 0x42, 0x01,   Z_(xx) },
+  { Z_(GPStepHueUp),    0xF021, 0x43, 0x01,   Z_(xx) },
+  { Z_(GPStepHueDown),  0xF021, 0x44, 0x01,   Z_(xx) },
+  { Z_(GPSatStop),      0xF021, 0x45, 0x01,   Z_() },
+  { Z_(GPMoveSatUp),    0xF021, 0x46, 0x01,   Z_(xx) },
+  { Z_(GPMoveSatDown),  0xF021, 0x47, 0x01,   Z_(xx) },
+  { Z_(GPStepSatUp),    0xF021, 0x48, 0x01,   Z_(xx) },
+  { Z_(GPStepSatDown),  0xF021, 0x49, 0x01,   Z_(xx) },
+  { Z_(GPMoveColor),    0xF021, 0x4A, 0x01,   Z_(xxxxyyyy) },
+  { Z_(GPStepColor),    0xF021, 0x4B, 0x01,   Z_(xxxxyyyy) },
+  { Z_(GPLockDoor),     0xF021, 0x50, 0x01,   Z_() },
+  { Z_(GPUnlockDoor),   0xF021, 0x51, 0x01,   Z_() },
+  { Z_(GPPress1of1),    0xF021, 0x60, 0x01,   Z_() },
+  { Z_(GPRelease1of1),  0xF021, 0x61, 0x01,   Z_() },
+  { Z_(GPPress1of2),    0xF021, 0x62, 0x01,   Z_() },
+  { Z_(GPRelease1of2),  0xF021, 0x63, 0x01,   Z_() },
+  { Z_(GPPress2of2),    0xF021, 0x64, 0x01,   Z_() },
+  { Z_(GPRelease2of2),  0xF021, 0x65, 0x01,   Z_() },
+  { Z_(GPShortPress1of1),0xF021, 0x66, 0x01,   Z_() },
+  { Z_(GPShortPress1of2),0xF021, 0x67, 0x01,   Z_() },
+  { Z_(GPShortPress2of2),0xF021, 0x68, 0x01,   Z_() },
 };
 
 /*********************************************************************************************\
@@ -283,12 +337,30 @@ void parseXYZ(const char *model, const SBuffer &payload, struct Z_XYZ_Var *xyz) 
   }
 }
 
-
 // Parse a cluster specific command, and try to convert into human readable
+// Includes specific handling for Tuya attributes
 void convertClusterSpecific(class Z_attribute_list &attr_list, uint16_t cluster, uint8_t cmd, bool direction, uint16_t shortaddr, uint8_t srcendpoint, const SBuffer &payload) {
   const char * command_name = nullptr;
   uint8_t conv_direction;
   Z_XYZ_Var xyz;
+
+  // always report attribute in raw format
+  // Format: "0001!06": "00" = "<cluster>!<cmd>": "<payload>" for commands to devices
+  // Format: "0004<00": "00" = "<cluster><<cmd>": "<payload>" for commands to devices
+  // char attrid_str[12];
+  // snprintf_P(attrid_str, sizeof(attrid_str), PSTR("%04X%c%02X"), cluster, direction ? '?' : '!', cmd);
+  // Z_attribute & attr_raw = attr_list.addAttribute(attrid_str);
+  Z_attribute & attr_raw = attr_list.addAttributeCmd(cluster, cmd, direction, false /* cluster specific */);
+  attr_raw.setBuf(payload, 0, payload.len());
+
+  // Take a shotcut in case of Tuya attribute which follow a different scheme
+  if (cluster == 0xEF00) {
+    // Tuya Cmd
+    if (convertTuyaSpecificCluster(attr_list, cluster, cmd, direction, shortaddr, srcendpoint, payload)) {
+      attr_list.removeAttribute(&attr_raw);   // remove raw command
+    }
+    return;     // abort, normal processing doesn't apply here
+  }
 
   //AddLog(LOG_LEVEL_INFO, PSTR(">>> len = %d - %02X%02X%02X"), payload.len(), payload.get8(0), payload.get8(1), payload.get8(2));
   for (uint32_t i = 0; i < sizeof(Z_Commands) / sizeof(Z_Commands[0]); i++) {
@@ -342,15 +414,6 @@ void convertClusterSpecific(class Z_attribute_list &attr_list, uint16_t cluster,
       }
     }
   }
-
-  // always report attribute in raw format
-  // Format: "0001!06": "00" = "<cluster>!<cmd>": "<payload>" for commands to devices
-  // Format: "0004<00": "00" = "<cluster><<cmd>": "<payload>" for commands to devices
-  // char attrid_str[12];
-  // snprintf_P(attrid_str, sizeof(attrid_str), PSTR("%04X%c%02X"), cluster, direction ? '<' : '!', cmd);
-  // Z_attribute & attr_raw = attr_list.addAttribute(attrid_str);
-  Z_attribute & attr_raw = attr_list.addAttributeCmd(cluster, cmd, direction);
-  attr_raw.setBuf(payload, 0, payload.len());
 
   // TODO Berry encode command
 
@@ -517,22 +580,21 @@ void parseSingleTuyaAttribute(Z_attribute & attr, const SBuffer &buf,
 
 //
 // Tuya - MOES specifc cluster 0xEF00
-// See https://medium.com/@dzegarra/zigbee2mqtt-how-to-add-support-for-a-new-tuya-based-device-part-2-5492707e882d
-// and https://github.com/Koenkk/zigbee-herdsman-converters/blob/9f503d47d3df6a99d133b78d2b52aa5c701ddddf/converters/fromZigbee.js#L339
+// https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-universal-docking-access-standard?id=K9ik6zvofpzql#subtitle-6-Private%20cluster
 //
 bool convertTuyaSpecificCluster(class Z_attribute_list &attr_list, uint16_t cluster, uint8_t cmd, bool direction, uint16_t shortaddr, uint8_t srcendpoint, const SBuffer &buf) {
-  // uint8_t status = buf.get8(0);
-  // uint8_t transid = buf.get8(1);
-  uint8_t dp = buf.get8(2);   // dpid from Tuya documentation
+  // uint16_t seq_number = buf.get16BigEndian(0)
+  uint8_t dpid = buf.get8(2);   // dpid from Tuya documentation
   uint8_t attr_type = buf.get8(3);   // data type from Tuya documentation
   uint16_t len = buf.get16BigEndian(4);
 
   if ((1 == cmd) || (2 == cmd)) {   // attribute report or attribute response
-    // create a synthetic attribute with id 'dp'
-    Z_attribute & attr = attr_list.addAttribute(cluster, (attr_type << 8) | dp);
+    // create a synthetic attribute with id 'dpid'
+    Z_attribute & attr = attr_list.addAttribute(cluster, (attr_type << 8) | dpid);
     parseSingleTuyaAttribute(attr, buf, 6, len, attr_type);
     return true;    // true = remove the original Tuya attribute
   }
+  // TODO Cmd 0x24 to sync clock with coordinator time
   return false;
 }
 

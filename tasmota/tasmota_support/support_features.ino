@@ -829,12 +829,17 @@ void ResponseAppendFeatures(void)
     feature9 |= 0x00000001;  // xsns_98_sgp40.ino
 #endif
 #if defined(USE_I2C) && defined(USE_LUXV30B)
-    feature9 |= 0x00000002;
+    feature9 |= 0x00000002;  // xsns_99_luxv30b.ino
 #endif
-//    feature9 |= 0x00000004;
-//    feature9 |= 0x00000008;
-
-//    feature9 |= 0x00000010;
+#if defined(USE_SPI) && defined(USE_CANSNIFFER)
+    feature9 |= 0x00000004;  // xsns_87_can_sniffer.ino
+#endif
+#if defined(USE_I2C) && defined(USE_QMC5883L)
+    feature9 |= 0x00000008;  // xsns_33_qmc5882l.ino
+#endif
+#if defined(USE_ENERGY_SENSOR) && defined(USE_MODBUS_ENERGY)
+    feature9 |= 0x00000010;  // xnrg_29_modbus.ino
+#endif
 //    feature9 |= 0x00000020;
 //    feature9 |= 0x00000040;
 //    feature9 |= 0x00000080;
