@@ -1154,4 +1154,15 @@
 #define D_NEOPOOL_PH_LOW                  "zu niedrig"
 #define D_NEOPOOL_PUMP_TIME_EXCEEDED      "Pumpzeit überschritten"
 
+#define D_CONFIGURE_TIMEPROP "Timeprop konfigurieren"
+#define D_TIMEPROP_PARAMETERS "Timeprop Parameter"
+#define D_TIMEPROP_FALLBACKAFTER "Stunden bis Fallback"
+#define D_TIMEPROP_STARTUPFALLBACK "Mit Fallback starten"
+#define D_TIMEPROP_RELAY "Relais"
+#define D_TIMEPROP_TIMEBASE "Relais Intervall Basis"
+#define D_TIMEPROP_FALLBACK "Relais Fallback Wert"
+#define D_TIMEPROP_MINUTES "Minuten"
+#define D_TIMEPROP_HOURS "Stunden"
+#define D_TIMEPROP_PERCENT "0-100"
+
 #endif  // _LANGUAGE_DE_DE_H_

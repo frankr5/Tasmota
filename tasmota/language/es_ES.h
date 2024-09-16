@@ -1154,4 +1154,15 @@
 #define D_NEOPOOL_PH_LOW                  "muy bajo"
 #define D_NEOPOOL_PUMP_TIME_EXCEEDED      "tiempo de bomba excedido"
 
+#define D_CONFIGURE_TIMEPROP "Configure Timeprop"
+#define D_TIMEPROP_PARAMETERS "Timeprop parameters"
+#define D_TIMEPROP_FALLBACKAFTER "Fallback Hours"
+#define D_TIMEPROP_STARTUPFALLBACK "Start with Fallback"
+#define D_TIMEPROP_RELAY "Relay"
+#define D_TIMEPROP_TIMEBASE "Relay Circle Length"
+#define D_TIMEPROP_FALLBACK "Relay Fallback Value"
+#define D_TIMEPROP_MINUTES "Minutes"
+#define D_TIMEPROP_HOURS "Hours"
+#define D_TIMEPROP_PERCENT "0-100"
+
 #endif  // _LANGUAGE_ES_ES_H_
