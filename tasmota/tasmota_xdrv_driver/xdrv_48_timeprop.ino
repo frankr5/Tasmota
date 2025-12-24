@@ -1,7 +1,7 @@
 /*
-  xdrv_48_timeprop.ino - Timeprop support for Sonoff-Tasmota
+  xdrv_55_touch.ino - Touch controllers
 
-  Copyright (C) 2021  Colin Law and Thomas Herrmann
+  Copyright (C) 2025
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,325 +17,509 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/*******************************************************************************************\
+ * Time Proportional driver
+ *
+ * allowing to add a time proportional overlay to relays. The individual value is defining
+ * how long a relay will be on during the cycle. E.g. if the cycle length is 10 minutes and
+ * the set value is 40 the relay will on for 4 minutes and off for 6 minutes. The cycle will
+ * start again.
+ * 
+ * the driver has some configuration items that are controllable via mqtt, console and web
+ * 
+ * TimePropEnable: Enables the Timeprop overlay
+ * TimePropCycleLength: Defines how long the cycle is. will take a value between 0 and 3.
+ *    That value is multiplied by 5 minutes. If TimePropCycleLength has a value of 2 the
+ *    cycle length is 3*60seconds. The maximum cycle length is therefore 20 minutes. The
+ *    limitation of values has been done to save configuration memoty.
+ * TimePropCount: The number of relays controlled via timeprops. When set to 5, the first
+ *    five relays are timeprop controlled. Because the relay - output mapping is flexible,
+ *    the timeprop - relay mapping has been made static to save configuration memory.
+ * TimePropLoadType:
+ *    0: load distribution. timeprop is trying to distribute the start time for each timeprop
+ *                          so that flow is distributed evenly.
+ *    1: load collection.   all timeprops are opening at start of cycle. closing is defined
+ *                          by set time
+ * TimePropFallbackAfter: if after this time no new set value has been received the timeprop
+ *    will fall back to a value. In case a controlling instance is failing the local timeprop
+ *    is acting in a defined state. the value it is falling back to is defined by
+ *    TimePropFallbackValue. 4 bit are set aside for this functionality. we store from 0 to 15
+ *    and multiply that by TIMEPROP_FALLBACKTIME_MULTIPLIER with a default of 2. Using that
+ *    default allows for a fallback time from 0 to 30 hours in 2 hours increment.
+ * TimePropFallbackValue: See above. To save memory this is also a 4 bit value that is expanded
+ *    to a value from 0 to 100.
+ * 
+ * To control the individual set values:
+
+ * TimePropSet<n>: is taking a value from 0-100 which defines the time the relay is on in
+ *    relation to TimePropCycleLength.
+\*******************************************************************************************/
+
 #ifdef USE_TIMEPROP
-#ifndef FIRMWARE_MINIMAL
-/*********************************************************************************************\
- * Code to drive one or more relays in a time proportioned manner give a
- * required power value.
- *
- * Given required power values in the range 0.0 to 1.0 the relays will be
- * driven on/off in such that the average power suppled will represent
- * the required power.
- * The cycle time is configurable.  If, for example, the
- * period is set to 10 minutes and the power input is 0.2 then the output will
- * be on for two minutes in every ten minutes.
- *
- * A value for actuator dead time may be provided. If you have a device that
- * takes a significant time to open/close then set this to the average of the
- * open and close times.  The algorithim will then adjust the output timing
- * accordingly to ensure that the output is not switched more rapidly than
- * the actuator can cope with.
- *
- * A facility to invert the output is provided which can be useful when used in
- * refrigeration processes and similar.
- *
- * In the case where only one relay is being driven the power value is set by
- * writing the value to the mqtt topic cmnd/timeprop_setpower_0.  If more than
- * one relay is being driven (as might be the case for a heat/cool application
- * where one relay drives the heater and the other the cooler) then the power
- * for the second relay is written to topic cmnd/timeprop_setpower_1 and so on.
- *
- * To cope with the problem of temporary wifi failure etc a
- * TIMEPROP_MAX_UPDATE_INTERVALS value is available. This can be set to the max
- * expected time between power updates and if this time is exceeded then the
- * power will fallback to a given safe value until a new value is provided. Set
- * the interval to 0 to disable this feature.
- *
- * Usage:
- * Place this file in the sonoff folder.
- * Clone the library https://github.com/colinl/process-control.git from Github
- * into a subfolder of lib.
- * In user_config.h or user_config_override.h for a single relay, include
- * code as follows:
 
- #define USE_TIMEPROP    //  include the timeprop feature (+1.2k)
-   // for single output
-   #define TIMEPROP_NUM_OUTPUTS          1       // how many outputs to control (with separate alogorithm for each)
-   #define TIMEPROP_CYCLETIMES           60      // cycle time seconds
-   #define TIMEPROP_DEADTIMES            0       // actuator action time seconds
-   #define TIMEPROP_OPINVERTS            false   // whether to invert the output
-   #define TIMEPROP_FALLBACK_POWERS      0.0       // falls back to this if too long betwen power updates
-   #define TIMEPROP_MAX_UPDATE_INTERVALS 120     // max no secs that are allowed between power updates (0 to disable)
-   #define TIMEPROP_RELAYS               1       // which relay to control 1:8
+#define XDRV_48 48
 
- * or for two relays:
- #define USE_TIMEPROP    //  include the timeprop feature (+1.2k)
-   // for single output
-   #define TIMEPROP_NUM_OUTPUTS          2               // how many outputs to control (with separate alogorithm for each)
-   #define TIMEPROP_CYCLETIMES           60,     10      // cycle time seconds
-   #define TIMEPROP_DEADTIMES            0,      0       // actuator action time seconds
-   #define TIMEPROP_OPINVERTS            false,  false   // whether to invert the output
-   #define TIMEPROP_FALLBACK_POWERS      0.0,      0.0       // falls back to this if too long betwen power updates
-   #define TIMEPROP_MAX_UPDATE_INTERVALS 120,    120     // max no secs that are allowed between power updates (0 to disable)
-   #define TIMEPROP_RELAYS               1,      2       // which relay to control 1:8
-
- * Publish values between 0 and 1 to the topic(s) described above
- *
-**/
-
-
-
-#include "Timeprop.h"
-
-
-#ifndef TIMEPROP_NUM_OUTPUTS
-#define TIMEPROP_NUM_OUTPUTS          1       // how many outputs to control (with separate alogorithm for each)
-#endif
-#ifndef TIMEPROP_CYCLETIMES
-#define TIMEPROP_CYCLETIMES           60      // cycle time seconds
-#endif
-#ifndef TIMEPROP_DEADTIMES
-#define TIMEPROP_DEADTIMES            0       // actuator action time seconds
-#endif
-#ifndef TIMEPROP_OPINVERTS
-#define TIMEPROP_OPINVERTS            false   // whether to invert the output
-#endif
-#ifndef TIMEPROP_FALLBACK_POWERS
-#define TIMEPROP_FALLBACK_POWERS      0       // falls back to this if too long between power updates
-#endif
-#ifndef TIMEPROP_MAX_UPDATE_INTERVALS
-#define TIMEPROP_MAX_UPDATE_INTERVALS 120     // max no secs that are allowed between power updates (0 to disable)
-#endif
-#ifndef TIMEPROP_RELAYS
-#define TIMEPROP_RELAYS               1       // which relay to control 1:8
-#endif
-#ifndef TIMEPROP_REPORT_SETTINGS
-#define TIMEPROP_REPORT_SETTINGS      false    // set to true to include timeprop settings in json output
+#ifndef TIMEPROP_FALLBACKTIME_MULTIPLIER
+#define TIMEPROP_FALLBACKTIME_MULTIPLIER 2
 #endif
 
-static Timeprop timeprops[TIMEPROP_NUM_OUTPUTS];
-static int relayNos[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_RELAYS};
-static long currentRelayStates = 0;  // current actual relay states. Bit 0 first relay
+const char kTimepropCommands[] PROGMEM = "|" D_CMND_TIMEPROP_SET "|" D_CMND_TIMEPROP_ENABLE "|" D_CMND_TIMEPROP_CYCLE_LENGTH "|" D_CMND_TIMEPROP_COUNT "|" D_CMND_TIMEPROP_LOAD_TYPE "|" D_CMND_TIMEPROP_FALLBACK_AFTER "|" D_CMND_TIMEPROP_FALLBACK_VALUE;
 
-struct {
-  Timeprop timeprops[TIMEPROP_NUM_OUTPUTS];
-  int relay_nos[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_RELAYS};
-  long current_relay_states = 0;  // current actual relay states. Bit 0 first relay
-  long current_time_secs = 0;  // a counter that counts seconds since initialisation
-} Tprop;
-
-#define D_CMND_TIMEPROP_PREFIX "Timeprop"
-#define D_CMND_TIMEPROP_SETPOWER "_SetPower_"   // underscores left in for backwards compatibility
-#define D_CMND_TIMEPROP_SETCYCLETIME "SetCycleTime"
-#define D_CMND_TIMEPROP_DEADTIME "SetDeadTime"
-#define D_CMND_TIMEPROP_OPINVERT "SetOutputInvert"
-#define D_CMND_TIMEPROP_FALLBACK_POWER "SetFallbackPower"
-#define D_CMND_TIMEPROP_MAX_UPDATE_INTERVAL "SetMaxUpdateInterval"
-
-int cycleTimes[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_CYCLETIMES};
-int deadTimes[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_DEADTIMES};
-unsigned char opInverts[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_OPINVERTS};
-float fallbacks[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_FALLBACK_POWERS};
-int maxIntervals[TIMEPROP_NUM_OUTPUTS] = {TIMEPROP_MAX_UPDATE_INTERVALS};
-
-enum TimepropCommands { CMND_TIMEPROP_SETPOWER };
-
-const char kCommands[] PROGMEM = D_CMND_TIMEPROP_PREFIX "|"
-  D_CMND_TIMEPROP_SETPOWER "|"
-  D_CMND_TIMEPROP_SETCYCLETIME "|"
-  D_CMND_TIMEPROP_DEADTIME "|"
-  D_CMND_TIMEPROP_OPINVERT "|"
-  D_CMND_TIMEPROP_FALLBACK_POWER "|"
-  D_CMND_TIMEPROP_MAX_UPDATE_INTERVAL ;
-
-void (* const Command[])(void) PROGMEM = {
-  &CmndSetPower,
-  &CmndSetCycleTime,
-  &CmndSetDeadTime,
-  &CmndSetOutputInvert,
-  &CmndSetFallbackPower,
-  &CmndSetMaxUpdateInterval,
+void (*const TimepropCommand[])(void) PROGMEM = {
+    &CmndTimepropSet,
+    &CmndTimePropEnable,
+    &CmndTimePropCycleLength,
+    &CmndTimePropCount,
+    &CmndTimePropLoadType,
+    &CmndTimePropFallbackAfter,
+    &CmndTimePropFallbackValue,
 };
 
-/* call this from elsewhere if required to set the power value for one of the timeprop instances */
-/* index specifies which one, 0 up */
-void TimepropSetPower(int index, float power) {
-  if (index >= 0  &&  index < TIMEPROP_NUM_OUTPUTS) {
-    Tprop.timeprops[index].setPower( power, Tprop.current_time_secs);
+// local "copy" of configuration
+struct TIMEPROP
+{
+  bool enabled = false;
+  uint8_t cycle_length = 0;
+  uint8_t count = 1;
+  bool load_type = false;
+  uint8_t fallback_time = 0;
+  uint8_t fallback_value = 0;
+} Timeprop;
+
+uint8_t *TimepropValues;
+uint16_t *TimepropStartTimes;
+uint16_t *TimepropSecondsLeft;
+
+uint16_t cycle_position = 0;
+uint16_t cycle_length_seconds = 0;
+
+uint32_t seconds_since_set = 0;
+
+/*********************************************************************************************\
+ * WebUI
+\*********************************************************************************************/
+#define WEB_HANDLE_TIMEPROP "s48"
+
+const char HTTP_BTN_MENU_TIMEPROP[] PROGMEM = "<p><form action='" WEB_HANDLE_TIMEPROP "' method='get'><button>" D_CONFIGURE_TIMEPROP "</button></form></p>";
+
+const char HTTP_FORM_TIMEPROPSTRT[] PROGMEM =
+    "<fieldset><legend><b>&nbsp; " D_TIMEPROP_PARAMETERS " &nbsp;</b></legend>"
+    "<form method='get' action='" WEB_HANDLE_TIMEPROP "'>";
+
+const char HTTP_FORM_TIMEPROP_ENABLE[] PROGMEM =
+    "<p><label><input id='tpe' type='checkbox' %s><b>" D_TIMEPROP_ENABLE "</b></label><br>";
+
+const char HTTP_FORM_TIMEPROP_CYCLELENGTH[] PROGMEM =
+    "<p><b>" D_TIMEPROP_CYCLELENGTH "</b> (15)<br>"
+    "<select id=\"tpl\" name=\"tpl\">"
+    "<option %s value=\"0\">5 " D_UNIT_MINUTE "</option>"
+    "<option %s value=\"1\">10 " D_UNIT_MINUTE " </option>"
+    "<option %s value=\"2\">15 " D_UNIT_MINUTE " </option>"
+    "<option %s value=\"3\">20 " D_UNIT_MINUTE " </option>"
+    "</select>"
+    "</p>";
+
+const char HTTP_FORM_TIMEPROP_COUNT_BEGIN[] PROGMEM =
+    "<p><b>" D_TIMEPROP_COUNT "</b> (5)<br>"
+    "<select id=\"tpc\" name=\"tpc\">";
+
+const char HTTP_FORM_TIMEPROP_COUNT_LINE[] PROGMEM =
+    "<option %s value=\"%d\">%d</option>";
+
+const char HTTP_FORM_TIMEPROP_COUNT_END[] PROGMEM =
+    "</select>"
+    "</p>";
+
+const char HTTP_FORM_TIMEPROP_LOADTYPE[] PROGMEM =
+    "<p><b>" D_TIMEPROP_LOADTYPE "</b> (" D_TIMEPROP_LOADTYPE_DISTRIBUTION ")<br>"
+    "<select id=\"tpt\" name=\"tpt\">"
+    "<option %s value=\"0\">" D_TIMEPROP_LOADTYPE_DISTRIBUTION "</option>"
+    "<option %s value=\"1\">" D_TIMEPROP_LOADTYPE_COLLECTION " </option>"
+    "</select>"
+    "</p>";
+
+const char HTTP_FORM_TIMEPROP_FALLBACK[] PROGMEM =
+    "<p><b>" D_TIMEPROP_FALLBACK_AFTER "</b> (0) " D_UNIT_HOUR "<br><input id='tpf' placeholder='0' value='%d'></p>"
+    "<p><b>" D_TIMEPROP_FALLBACK_VALUE "</b> (0) (0-100)<br><input id='tpv' placeholder='0' value='%d'></p>";
+
+void HandleTimepropConfiguration(void)
+{
+  if (!HttpCheckPriviledgedAccess())
+  {
+    return;
   }
+
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP D_CONFIGURE_TIMEPROP));
+
+  if (Webserver->hasArg(F("save")))
+  {
+    TimePropSaveSettings();
+    WebRestart(1);
+    return;
+  }
+
+  WSContentStart_P(PSTR(D_CONFIGURE_TIMEPROP));
+
+  WSContentSendStyle();
+
+  WSContentSend_P(HTTP_FORM_TIMEPROPSTRT);
+
+  WSContentSend_P(HTTP_FORM_TIMEPROP_ENABLE, Timeprop.enabled ? PSTR(" checked") : "");
+  WSContentSend_P(HTTP_FORM_TIMEPROP_CYCLELENGTH,
+                  Timeprop.cycle_length == 0 ? PSTR("selected=\"\"") : "",
+                  Timeprop.cycle_length == 1 ? PSTR("selected=\"\"") : "",
+                  Timeprop.cycle_length == 2 ? PSTR("selected=\"\"") : "",
+                  Timeprop.cycle_length == 3 ? PSTR("selected=\"\"") : "");
+
+  WSContentSend_P(HTTP_FORM_TIMEPROP_COUNT_BEGIN);
+  for (uint8_t i = 0; i < MAX_RELAYS; i++)
+  {
+    WSContentSend_P(HTTP_FORM_TIMEPROP_COUNT_LINE, Timeprop.count == i + 1 ? PSTR("selected=\"\"") : "", i + 1, i + 1);
+  }
+  WSContentSend_P(HTTP_FORM_TIMEPROP_COUNT_END);
+
+  WSContentSend_P(HTTP_FORM_TIMEPROP_LOADTYPE,
+                  !Timeprop.load_type ? PSTR("selected=\"\"") : "",
+                  Timeprop.load_type ? PSTR("selected=\"\"") : "");
+
+  WSContentSend_P(HTTP_FORM_TIMEPROP_FALLBACK, Timeprop.fallback_time, Timeprop.fallback_value);
+
+  WSContentSend_P(HTTP_FORM_END);
+  WSContentSpaceButton(BUTTON_CONFIGURATION);
+
+  WSContentStop();
 }
 
-void TimepropInit(void) {
-  for (int i = 0; i < TIMEPROP_NUM_OUTPUTS; i++) {
-    Tprop.timeprops[i].initialise(cycleTimes[i], deadTimes[i], opInverts[i], fallbacks[i],
-      maxIntervals[i], Tprop.current_time_secs);
+void TimePropSaveSettings(void)
+{
+  String cmnd = F(D_CMND_BACKLOG "0 ");
+  if (Webserver->hasArg("tpe"))
+  {
+    cmnd += AddWebCommand(PSTR(D_CMND_TIMEPROP_ENABLE), PSTR("1"), PSTR("1"));
   }
-}
-
-void CmndSetPower(void) {
-  if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS) {
-    if(XdrvMailbox.data_len) {
-      float newPower=CharToFloat(XdrvMailbox.data);
-      timeprops[XdrvMailbox.index].setPower(newPower, Tprop.current_time_secs );
-      ResponseCmndFloat(newPower, 2);
-    }
+  else
+  {
+    cmnd += AddWebCommand(PSTR(D_CMND_TIMEPROP_ENABLE), PSTR("0"), PSTR("0"));
   }
-}
-
-// commands for settings all take the same form
-// prefix commands with 'timeprop'
-// then append the command string eg. 'SetCycleTime'
-// then append the output number (0 for a single output)
-// then append the value to set set, or
-// leave blank to retrieve the current value
-// eg.
-// 'TimepropSetCycleTime0 120' will set the value of cycle time for output 0 to 120
-// 'TimepropSetCycleTime0' will retrieve the value of cycle time for output 0
-
-void CmndSetCycleTime(void) {
-  if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS ) {
-    if(XdrvMailbox.data_len) {
-      int newCycleTime=TextToInt(XdrvMailbox.data);
-      if(newCycleTime>0) {
-        cycleTimes[XdrvMailbox.index] = newCycleTime;
-        Tprop.timeprops[XdrvMailbox.index].initialise(cycleTimes[XdrvMailbox.index], deadTimes[XdrvMailbox.index], opInverts[XdrvMailbox.index], fallbacks[XdrvMailbox.index], maxIntervals[XdrvMailbox.index], Tprop.current_time_secs);
-        ResponseCmndNumber(newCycleTime);
-      }
-    }
-    else {
-      ResponseCmndNumber(cycleTimes[XdrvMailbox.index]);
-    }
-  }
-}
-
-void CmndSetDeadTime(void) {
-  if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS ) {
-    if(XdrvMailbox.data_len) {
-      int newDeadTime=TextToInt(XdrvMailbox.data);
-      if(newDeadTime>0) {
-        deadTimes[XdrvMailbox.index] = newDeadTime;
-        Tprop.timeprops[XdrvMailbox.index].initialise(cycleTimes[XdrvMailbox.index], deadTimes[XdrvMailbox.index], opInverts[XdrvMailbox.index], fallbacks[XdrvMailbox.index], maxIntervals[XdrvMailbox.index], Tprop.current_time_secs);
-        ResponseCmndNumber(newDeadTime);
-      }
-    } 
-    else {
-      ResponseCmndNumber(deadTimes[XdrvMailbox.index]);
-    }
-  }
-}
-
-void CmndSetOutputInvert(void) {
-  if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS ) {
-    if(XdrvMailbox.data_len) {
-      unsigned char newInvert=TextToInt(XdrvMailbox.data);
-      opInverts[XdrvMailbox.index] = newInvert;
-      Tprop.timeprops[XdrvMailbox.index].initialise(cycleTimes[XdrvMailbox.index], deadTimes[XdrvMailbox.index], opInverts[XdrvMailbox.index], fallbacks[XdrvMailbox.index], maxIntervals[XdrvMailbox.index], Tprop.current_time_secs);
-      ResponseCmndNumber(newInvert);
-    }
-    else {
-      ResponseCmndNumber(opInverts[XdrvMailbox.index]);
-    }
-  }
-}
-
-void CmndSetFallbackPower(void) {
-  if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS ) {
-    if(XdrvMailbox.data_len) {
-      float newPower=CharToFloat(XdrvMailbox.data);
-      if(newPower>=0.0 && newPower<=1.0) {
-        fallbacks[XdrvMailbox.index] = newPower;
-        Tprop.timeprops[XdrvMailbox.index].initialise(cycleTimes[XdrvMailbox.index], deadTimes[XdrvMailbox.index], opInverts[XdrvMailbox.index], fallbacks[XdrvMailbox.index], maxIntervals[XdrvMailbox.index], Tprop.current_time_secs);
-        ResponseCmndFloat(newPower, 2);
-      }
-    }
-    else {
-      ResponseCmndFloat(fallbacks[XdrvMailbox.index], 2);
-    }
-  }
-}
-
-void CmndSetMaxUpdateInterval(void) {
-  if (XdrvMailbox.index >=0 && XdrvMailbox.index < TIMEPROP_NUM_OUTPUTS ) {
-    if(XdrvMailbox.data_len) {
-      int newInterval=TextToInt(XdrvMailbox.data);
-      if(newInterval>0) {
-        maxIntervals[XdrvMailbox.index] = newInterval;
-        Tprop.timeprops[XdrvMailbox.index].initialise(cycleTimes[XdrvMailbox.index], deadTimes[XdrvMailbox.index], opInverts[XdrvMailbox.index], fallbacks[XdrvMailbox.index], maxIntervals[XdrvMailbox.index], Tprop.current_time_secs);
-        ResponseCmndNumber(newInterval);
-      }
-    }
-    else {
-      ResponseCmndNumber(maxIntervals[XdrvMailbox.index]);
-    }
-  }
-}
-
-void TimepropEverySecond(void) {
-  Tprop.current_time_secs++;    // increment time
-  for (int i=0; i<TIMEPROP_NUM_OUTPUTS; i++) {
-    int newState = Tprop.timeprops[i].tick(Tprop.current_time_secs);
-    if (newState != bitRead(Tprop.current_relay_states, Tprop.relay_nos[i]-1)){
-      // remove the third parameter below if using tasmota prior to v6.0.0
-      ExecuteCommandPower(Tprop.relay_nos[i], newState,SRC_IGNORE);
-    }
-  }
-}
-
-// called by the system each time a relay state is changed
-void TimepropXdrvPower(void) {
-  // for a single relay the state is in the lsb of index, I have think that for
-  // multiple outputs then succesive bits will hold the state but have not been
-  // able to test that
-  Tprop.current_relay_states = XdrvMailbox.index;
-}
-
-void ShowValues(void) {
-#if TIMEPROP_REPORT_SETTINGS
-  ResponseAppend_P(PSTR(",\"Timeprop\":{"));
-  for (int i=0; i<TIMEPROP_NUM_OUTPUTS; i++) {
-    ResponseAppend_P(PSTR("\"Output%d\":{"),i);
-    ResponseAppend_P(PSTR("\"CycleTime\":%d,"),cycleTimes[i]);
-    ResponseAppend_P(PSTR("\"DeadTime\":%d,"),deadTimes[i]);
-    ResponseAppend_P(PSTR("\"OutputInvert\":%d,"),opInverts[i]);
-    ResponseAppend_P(PSTR("\"FallbackPower\":%2_f,"),&fallbacks[i]);
-    ResponseAppend_P(PSTR("\"MaxUpdateInterval\":%d"),maxIntervals[i]);
-    ResponseAppend_P(i<TIMEPROP_NUM_OUTPUTS-1 ? PSTR("},") : PSTR("}"));
-  }
-  ResponseAppend_P(PSTR("}"));
-#endif // TIMEPROP_REPORT_SETTINGS
+  cmnd += AddWebCommand(PSTR(D_CMND_TIMEPROP_CYCLE_LENGTH), PSTR("tpl"), PSTR("2"));
+  cmnd += AddWebCommand(PSTR(D_CMND_TIMEPROP_COUNT), PSTR("tpc"), PSTR("5"));
+  cmnd += AddWebCommand(PSTR(D_CMND_TIMEPROP_LOAD_TYPE), PSTR("tpt"), PSTR("0"));
+  cmnd += AddWebCommand(PSTR(D_CMND_TIMEPROP_FALLBACK_AFTER), PSTR("tpf"), PSTR("0"));
+  cmnd += AddWebCommand(PSTR(D_CMND_TIMEPROP_FALLBACK_VALUE), PSTR("tpv"), PSTR("0"));
+  ExecuteWebCommand((char *)cmnd.c_str());
 }
 
 /*********************************************************************************************\
- * Interface
+ * Internal
 \*********************************************************************************************/
+// takes percent value and returns the 3 bit value we use to store in config
+uint8_t reduceFallbackValue(uint8_t percentValue)
+{
+  float fourBitValue = (float)percentValue * 7.0f / 100.0f;
+  return round(fourBitValue);
+}
 
-#define XDRV_48       48
+// takes 4bit value and returns the percent value
+uint8_t expandFallbackValue(uint8_t fourBitValue)
+{
+  float percentValue = (float)fourBitValue * 100.0f / 7.0f;
+  return round(percentValue);
+}
 
-bool Xdrv48(uint32_t function) {
+// takes percent value and returns the 3 bit value we use to store in config
+uint8_t reduceFallbackTime(uint8_t hourValue)
+{
+  uint8_t fourBitValue = hourValue / TIMEPROP_FALLBACKTIME_MULTIPLIER;
+
+  if (fourBitValue > 15)
+  {
+    fourBitValue = 15;
+  }
+
+  return fourBitValue;
+}
+
+// takes 4bit value and returns the percent value
+uint8_t expandFallbackTime(uint8_t fourBitValue)
+{
+  uint8_t hourValue = fourBitValue * TIMEPROP_FALLBACKTIME_MULTIPLIER;
+  return hourValue;
+}
+
+/*********************************************************************************************\
+ * Init
+\*********************************************************************************************/
+void TimepropInit(void)
+{
+  LoadPersistentSettings();
+
+  AllocateTimepropValues();
+}
+
+void LoadPersistentSettings(void)
+{
+  Timeprop.enabled = Settings->timeprop_cfg.enable;
+  Timeprop.cycle_length = Settings->timeprop_cfg.cycle_length;
+  Timeprop.count = Settings->timeprop_cfg.count + 1;
+  Timeprop.load_type = Settings->timeprop_cfg.load_type;
+  Timeprop.fallback_time = expandFallbackTime(Settings->timeprop_cfg.fallback_time);
+  Timeprop.fallback_value = expandFallbackValue(Settings->timeprop_cfg.fallback_value);
+}
+
+void AllocateTimepropValues(void)
+{
+  if (Timeprop.enabled)
+  {
+    free(TimepropValues);
+    TimepropValues = (uint8_t *)malloc(Timeprop.count * sizeof *TimepropValues);
+
+    free(TimepropStartTimes);
+    TimepropStartTimes = (uint16_t *)malloc(Timeprop.count * sizeof *TimepropStartTimes);
+
+    free(TimepropSecondsLeft);
+    TimepropSecondsLeft = (uint16_t *)malloc(Timeprop.count * sizeof *TimepropSecondsLeft);
+
+    cycle_length_seconds = (Timeprop.cycle_length + 1) * 5 * 60;
+
+    for (uint8_t i = 0; i < Timeprop.count; i++)
+    {
+      TimepropValues[i] = 0;
+      TimepropSecondsLeft[i] = 0;
+
+      if (Timeprop.load_type)
+      {
+        // load collection
+        TimepropStartTimes[i] = 0;
+      }
+      else
+      {
+        // load distribution
+        TimepropStartTimes[i] = (cycle_length_seconds / Timeprop.count) * i;
+      }
+    }
+  }
+}
+/*********************************************************************************************\
+ * Commands
+\*********************************************************************************************/
+void CmndTimepropSet(void)
+{
+  if (!Timeprop.enabled)
+  {
+    AddLog(LOG_LEVEL_ERROR, PSTR("TPR: Not enabled"));
+    return;
+  }
+
+  if (XdrvMailbox.index < 1 || XdrvMailbox.index > Timeprop.count)
+  {
+    return;
+  }
+
+  if (XdrvMailbox.data_len > 0)
+  {
+    char sub_string[XdrvMailbox.data_len];
+
+    uint32_t incoming_value = atoi(subStr(sub_string, XdrvMailbox.data, ",", 1));
+    if (incoming_value < 0 || incoming_value > 100)
+    {
+      return;
+    }
+
+    seconds_since_set = 0; // reset fallback counter
+
+    TimepropValues[XdrvMailbox.index - 1] = incoming_value;
+  }
+
+  ResponseCmndIdxNumber(TimepropValues[XdrvMailbox.index - 1]);
+}
+
+void CmndTimePropEnable(void)
+{
+  if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 1))
+  {
+    Timeprop.enabled = XdrvMailbox.payload;
+
+    Settings->timeprop_cfg.enable = Timeprop.enabled;
+    SettingsSave(0);
+  }
+
+  AllocateTimepropValues();
+
+  ResponseCmndNumber(Timeprop.enabled);
+}
+
+void CmndTimePropCycleLength(void)
+{
+  if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 3))
+  {
+    Timeprop.cycle_length = XdrvMailbox.payload;
+
+    Settings->timeprop_cfg.cycle_length = Timeprop.cycle_length;
+    SettingsSave(0);
+  }
+  ResponseCmndNumber(Timeprop.cycle_length);
+}
+
+void CmndTimePropCount(void)
+{
+  if ((XdrvMailbox.payload >= 1) && (XdrvMailbox.payload <= MAX_RELAYS))
+  {
+    Timeprop.count = XdrvMailbox.payload;
+
+    Settings->timeprop_cfg.count = Timeprop.count - 1;
+    SettingsSave(0);
+  }
+
+  AllocateTimepropValues();
+
+  ResponseCmndNumber(Timeprop.count);
+}
+
+void CmndTimePropLoadType(void)
+{
+  if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 1))
+  {
+    Timeprop.load_type = XdrvMailbox.payload;
+
+    Settings->timeprop_cfg.load_type = Timeprop.load_type;
+    SettingsSave(0);
+  }
+
+  AllocateTimepropValues();
+
+  ResponseCmndNumber(Timeprop.load_type);
+}
+
+void CmndTimePropFallbackAfter(void)
+{
+  if (XdrvMailbox.payload >= 0)
+  {
+
+    Settings->timeprop_cfg.fallback_time = reduceFallbackTime(XdrvMailbox.payload);
+    Timeprop.fallback_time = expandFallbackTime(Settings->timeprop_cfg.fallback_time);
+
+    SettingsSave(0);
+  }
+  ResponseCmndNumber(Timeprop.fallback_time);
+}
+
+void CmndTimePropFallbackValue(void)
+{
+  if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 100))
+  {
+
+    Settings->timeprop_cfg.fallback_value = reduceFallbackValue(XdrvMailbox.payload);
+    Timeprop.fallback_value = expandFallbackValue(Settings->timeprop_cfg.fallback_value);
+
+    SettingsSave(0);
+  }
+  ResponseCmndNumber(Timeprop.fallback_value);
+}
+
+/*********************************************************************************************\
+ * Periodic
+\*********************************************************************************************/
+// TODO wenn fallback aufgeloest wird bleiben die anderen alle auf fallback value stehen.
+// wollen wir das? aktuell fühlt sich das richtig an
+void TimepropEverySecond(void)
+{
+  if (!Timeprop.enabled)
+  {
+    return;
+  }
+
+  if (Timeprop.fallback_time > 0)
+  {
+    if (seconds_since_set == Timeprop.fallback_time * 60 * 60)
+    {
+      AddLog(LOG_LEVEL_INFO, PSTR("TPR: fallback reached %d"), Timeprop.fallback_value);
+      for (uint8_t i = 0; i < Timeprop.count; i++)
+      {
+        TimepropValues[i] = Timeprop.fallback_value;
+      }
+      seconds_since_set++; // increase so that we do it only once
+    }
+    else
+    {
+      seconds_since_set++; // increase fallback check
+    }
+  }
+
+  for (uint8_t i = 0; i < Timeprop.count; i++)
+  {
+    if (TimepropValues[i] == 0)
+    {
+      continue;
+    }
+
+    if (TimepropStartTimes[i] == cycle_position)
+    {
+      AddLog(LOG_LEVEL_DEBUG, PSTR("TPR: On %d. STart at: %d for %d"), i, TimepropStartTimes[i], GetOpenSeconds(i, cycle_length_seconds));
+      TimepropSecondsLeft[i] = GetOpenSeconds(i, cycle_length_seconds);
+      AddLog(LOG_LEVEL_INFO, PSTR("TPR: Trigger Power On %d"), i + 1);
+      ExecuteCommandPower(i + 1, POWER_ON, SRC_IGNORE);
+    }
+
+    if (TimepropSecondsLeft[i] == 1)
+    {
+      AddLog(LOG_LEVEL_INFO, PSTR("TPR: Trigger Power Off %d"), i + 1);
+      ExecuteCommandPower(i + 1, POWER_OFF, SRC_IGNORE);
+    }
+
+    if (TimepropSecondsLeft[i] > 0)
+    {
+      TimepropSecondsLeft[i]--;
+    }
+  }
+
+  // maintain cycle
+  if (cycle_position >= cycle_length_seconds - 1)
+  {
+    cycle_position = 0;
+  }
+  else
+  {
+    cycle_position++;
+  }
+}
+
+uint16_t GetOpenSeconds(uint8_t i, uint16_t cycle_length_seconds)
+{
+  if (TimepropValues[i] == 100)
+  {
+    // special for 100%. return a slightly longer value to prevent a slight off/on.
+    // that will make no difference but reduce part lifetime
+    return cycle_length_seconds + 2;
+  }
+  return cycle_length_seconds * TimepropValues[i] / 100;
+}
+
+bool Xdrv48(uint32_t function)
+{
   bool result = false;
 
-  switch (function) {
-    case FUNC_INIT:
-      TimepropInit();
-      break;
-    case FUNC_EVERY_SECOND:
-      TimepropEverySecond();
-      break;
-    case FUNC_COMMAND:
-      result = DecodeCommand(kCommands, Command);
-      break;
-    case FUNC_SET_POWER:
-      TimepropXdrvPower();
-      break;
-    case FUNC_JSON_APPEND:
-      ShowValues();
-      break;
-    case FUNC_ACTIVE:
-      result = true;
-      break;
+  switch (function)
+  {
+  case FUNC_INIT:
+    TimepropInit();
+    break;
+  case FUNC_EVERY_SECOND:
+    TimepropEverySecond();
+    break;
+#ifdef USE_WEBSERVER
+  case FUNC_WEB_ADD_BUTTON:
+    WSContentSend_P(HTTP_BTN_MENU_TIMEPROP);
+    break;
+  case FUNC_WEB_ADD_HANDLER:
+    WebServer_on(PSTR("/" WEB_HANDLE_TIMEPROP), HandleTimepropConfiguration);
+    break;
+#endif // USE_WEBSERVER
+  case FUNC_COMMAND:
+    result = DecodeCommand(kTimepropCommands, TimepropCommand);
+    break;
   }
+
   return result;
 }
 
-#endif // FIRMWARE_MINIMAL
 #endif // USE_TIMEPROP
